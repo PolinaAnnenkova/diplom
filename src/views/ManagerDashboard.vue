@@ -47,6 +47,8 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import ProjectsView from '@/views/ProjectsView.vue';
 import TasksView from '@/views/TasksView.vue';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 
 const router = useRouter();
 const activeTab = ref('projects');

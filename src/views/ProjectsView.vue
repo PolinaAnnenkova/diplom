@@ -47,7 +47,8 @@
 import { ref, onMounted } from 'vue';
 import ProjectModal from '@/views/ProjectModal.vue';
 import mockApi from '../../api/mockApi.js';
-
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 const projects = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
@@ -107,8 +108,10 @@ async function deleteProject(id) {
     try {
       await mockApi.deleteProject(id);
       await loadProjects();
+      toast.success('Проект успешно удалён');
     } catch (err) {
       error.value = err.message;
+      toast.error('Ошибка при удалении проекта');
     }
   }
 }

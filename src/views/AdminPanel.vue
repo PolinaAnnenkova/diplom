@@ -57,8 +57,10 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import mockApi from '../../api/mockApi.js';
-import UserModal from '@/views/UserModal.vue'
-
+import UserModal from '@/views/UserModal.vue';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
+//const toast = useToast();
 const router = useRouter();
 
 const users = ref([]);
@@ -126,13 +128,14 @@ const deleteUser = async (id) => {
   if (confirm('Вы уверены, что хотите удалить пользователя?')) {
     try {
       await mockApi.deleteUser(id);
-      await loadUsers(); // Перезагружаем список пользователей
+      await loadUsers(); // Обновляем список
+      toast.success('Пользователь успешно удалён');
     } catch (err) {
       error.value = err.message;
+      toast.error('Ошибка при удалении пользователя');
     }
   }
 };
-
 // Выход из системы
 const logout = async () => {
   try {

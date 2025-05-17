@@ -46,6 +46,8 @@
 
 <script setup>
 import { ref, reactive, watch } from 'vue';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 
 const props = defineProps({
   showModal: Boolean,
@@ -85,8 +87,14 @@ function resetForm() {
 }
 
 async function handleSubmit() {
+   // ✅ Уведомление об успешной операции
+    
+  
   emit('save', { ...form });
   closeModal();
+  toast.success(props.isEditing 
+      ? 'Проект успешно обновлён' 
+      : 'Проект добавлен');
 }
 
 function closeModal() {

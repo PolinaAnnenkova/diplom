@@ -80,9 +80,12 @@
   </div>
 </template>
 
+
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue';
-import mockApi from '../../api/mockApi'
+import { ref, reactive, watch } from 'vue';
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
+
 const props = defineProps({
   showModal: Boolean,
   currentUser: Object,
@@ -111,7 +114,7 @@ const errors = reactive({
 
 const isSubmitting = ref(false);
 
-// Следим за изменением текущего пользователя
+// Следим за текущим пользователем
 watch(() => props.currentUser, (newVal) => {
   if (newVal) {
     Object.assign(form, {
@@ -119,7 +122,7 @@ watch(() => props.currentUser, (newVal) => {
       name: newVal.name,
       age: newVal.age,
       login: newVal.login,
-      password: '', // Пароль специально не копируем
+      password: '',
       email: newVal.email,
       role: newVal.role
     });
@@ -128,11 +131,9 @@ watch(() => props.currentUser, (newVal) => {
   }
 }, { immediate: true });
 
-// Сбрасываем форму при открытии/закрытии модалки
+// Сброс формы при закрытии модалки
 watch(() => props.showModal, (visible) => {
-  if (!visible) {
-    resetForm();
-  }
+  if (!visible) resetForm();
 });
 
 function resetForm() {
@@ -145,86 +146,97 @@ function resetForm() {
     email: '',
     role: 'user'
   });
-  
-  // Очищаем ошибки
   Object.keys(errors).forEach(key => errors[key] = '');
 }
 
 function validate() {
   let isValid = true;
-  
+
   if (!form.name.trim()) {
     errors.name = 'ФИО обязательно';
+    toast.error(errors.name);
     isValid = false;
   } else {
     errors.name = '';
   }
-  
+
   if (form.age === null || form.age === '') {
     errors.age = 'Возраст обязателен';
+    toast.error(errors.age);
     isValid = false;
   } else if (form.age < 14 || form.age > 120) {
     errors.age = 'Возраст 14-120 лет';
+    toast.error(errors.age);
     isValid = false;
   } else {
     errors.age = '';
   }
-  
+
   if (!form.login.trim()) {
     errors.login = 'Логин обязателен';
+    toast.error(errors.login);
     isValid = false;
   } else {
     errors.login = '';
   }
-  
-  // Пароль обязателен только при создании
+
   if (!props.isEditing && !form.password) {
     errors.password = 'Пароль обязателен';
+    toast.error(errors.password);
     isValid = false;
   } else if (form.password && form.password.length < 6) {
     errors.password = 'Минимум 6 символов';
+    toast.error(errors.password);
     isValid = false;
   } else {
     errors.password = '';
   }
-  
+
   if (!form.email.trim()) {
     errors.email = 'Email обязателен';
+    toast.error(errors.email);
     isValid = false;
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
     errors.email = 'Некорректный email';
+    toast.error(errors.email);
     isValid = false;
   } else {
     errors.email = '';
   }
-  
+
   return isValid;
 }
+
 
 async function handleSubmit() {
   if (!validate()) return;
 
   isSubmitting.value = true;
-  
+
   try {
-    // Если редактирование и пароль не меняли - не отправляем пароль
     const dataToSave = { ...form };
     if (props.isEditing && !dataToSave.password) {
       delete dataToSave.password;
     }
 
     emit('save', dataToSave);
-    resetForm(); // Очищаем форму после успешного сохранения
+    resetForm();
     closeModal();
+
+    // ✅ Уведомление об успешной операции
+    toast.success(props.isEditing 
+      ? 'Пользователь успешно обновлён' 
+      : 'Пользователь добавлен');
   } catch (err) {
     console.error('Ошибка:', err);
+    toast.error('Произошла ошибка при сохранении');
   } finally {
     isSubmitting.value = false;
   }
 }
 
 function closeModal() {
-  resetForm(); // Дополнительная очистка при закрытии
+  resetForm();
   emit('close');
 }
 </script>

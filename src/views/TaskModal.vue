@@ -67,7 +67,8 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue';
-
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 const props = defineProps({
   showModal: Boolean,
   currentTask: {
