@@ -1,40 +1,41 @@
-
 <template>
-  <div class="executor-view">
-    <div class="tabs">
-      <button 
-        @click="activeTab = 'projects'"
-        :class="{ 'active': activeTab === 'projects' }"
-      >
-        Проекты
-      </button>
-      <button 
-        @click="activeTab = 'tasks'"
-        :class="{ 'active': activeTab === 'tasks' }"
-      >
-        Задачи
-      </button>
-      <button 
-        @click="activeTab = 'time-entries'"
-        :class="{ 'active': activeTab === 'time-entries' }"
-      >
-        Проводки
-      </button>
+   <div class="executor-view">
+    <div class="header">
+      <div class="tabs">
+        <button 
+          @click="activeTab = 'projects'"
+          :class="{ 'active': activeTab === 'projects' }"
+        >
+          Проекты
+        </button>
+        <button 
+          @click="activeTab = 'tasks'"
+          :class="{ 'active': activeTab === 'tasks' }"
+        >
+          Задачи
+        </button>
+        <button 
+          @click="activeTab = 'time-entries'"
+          :class="{ 'active': activeTab === 'time-entries' }"
+        >
+          Проводки
+        </button>
+      </div>
+      <button @click="logout" class="logout-btn">Выйти</button>
     </div>
 
     <div class="tab-content">
       <!-- Вкладка проектов -->
-      <div v-if="activeTab === 'projects'" class="projects-tab">
+      <div v-if="activeTab === 'projects'" class="projects-tab full-height-tab">
         <div v-if="loading.projects" class="loading">Загрузка проектов...</div>
         <div v-else-if="error.projects" class="error">{{ error.projects }}</div>
         <div v-else class="projects-container">
-          <table class="data-table">
+          <table class="data-table full-width-table">
             <thead>
               <tr>
                 <th>Название</th>
                 <th>Код</th>
                 <th>Статус</th>
-                <th>Кол-во задач</th>
               </tr>
             </thead>
             <tbody>
@@ -51,7 +52,6 @@
                     {{ getProjectStatusName(project.status) }}
                   </span>
                 </td>
-                <td>{{ getTaskCount(project.id) }}</td>
               </tr>
             </tbody>
           </table>
@@ -59,7 +59,7 @@
       </div>
 
       <!-- Вкладка задач -->
-      <div v-else-if="activeTab === 'tasks'" class="tasks-tab">
+      <div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
         <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
         <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
         <div v-else class="tasks-container">
@@ -77,20 +77,18 @@
             
             <select v-model="currentStatusFilter" @change="applyFilters">
               <option value="">Все статусы</option>
-              <option value="todo">К выполнению</option>
-              <option value="in_progress">В работе</option>
-              <option value="done">Завершена</option>
+              <option value="active">Активна</option>
+              <option value="inactive">Не активна</option>
             </select>
           </div>
 
-          <table class="data-table">
+          <table class="data-table full-width-table">
             <thead>
               <tr>
                 <th>Название</th>
                 <th>Проект</th>
                 <th>Описание</th>
                 <th>Статус</th>
-                <th>Дата создания</th>
               </tr>
             </thead>
             <tbody>
@@ -103,7 +101,6 @@
                     {{ getTaskStatusName(task.status) }}
                   </span>
                 </td>
-                <td>{{ formatDate(task.createdAt) }}</td>
               </tr>
             </tbody>
           </table>
@@ -111,7 +108,7 @@
       </div>
 
       <!-- Вкладка проводок -->
-      <div v-else class="time-entries-tab">
+      <div v-else class="time-entries-tab full-height-tab">
         <div class="time-entries-header">
           <button @click="openCreateTimeEntryModal" class="add-button">
             + Новая проводка
@@ -130,7 +127,7 @@
         <div v-if="loading.timeEntries" class="loading">Загрузка проводок...</div>
         <div v-else-if="error.timeEntries" class="error">{{ error.timeEntries }}</div>
         <div v-else class="time-entries-container">
-          <table class="data-table">
+          <table class="data-table full-width-table">
             <thead>
               <tr>
                 <th>Дата</th>
@@ -141,7 +138,11 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="entry in timeEntries" :key="entry.id">
+              <tr 
+                v-for="entry in groupedTimeEntries" 
+                :key="entry.id"
+                :class="getDayRowClass(entry.date)"
+              >
                 <td>{{ formatDate(entry.date) }}</td>
                 <td>{{ getTaskName(entry.taskId) }}</td>
                 <td>{{ entry.hours }}</td>
@@ -160,10 +161,25 @@
 </template>
 
 <script setup>
-
 import { ref, onMounted, computed } from 'vue';
 import mockApi from '@/../api/mockApi.js';
 import TimeEntryModal from '@/views/TimeEntryModal.vue';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+const logout = async () => {
+  try {
+    // Очистка данных пользователя
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('currentUser');
+    // Перенаправление на страницу авторизации
+    router.push('/');
+  } catch (err) {
+    console.error('Ошибка при выходе:', err);
+  }
+};
+
 const activeTab = ref('tasks');
 const projects = ref([]);
 const allTasks = ref([]);
@@ -198,7 +214,46 @@ const filteredTasks = computed(() => {
   return tasks;
 });
 
-// Загружаем данные при монтировании
+// Группировка проводок по дням с подсчетом суммы часов
+const groupedTimeEntries = computed(() => {
+  const grouped = {};
+  
+  timeEntries.value.forEach(entry => {
+    const date = entry.date?.split('T')[0] || entry.date;
+    if (!grouped[date]) {
+      grouped[date] = {
+        totalHours: 0,
+        entries: []
+      };
+    }
+    grouped[date].entries.push(entry);
+    grouped[date].totalHours += parseFloat(entry.hours) || 0;
+  });
+
+  return Object.values(grouped).flatMap(group => 
+    group.entries.map(entry => ({
+      ...entry,
+      totalHours: group.totalHours
+    }))
+  );
+});
+
+// Определение класса строки в зависимости от суммы часов
+function getDayRowClass(date) {
+  const entry = groupedTimeEntries.value.find(e => {
+    const eDate = e.date?.split('T')[0] || e.date;
+    const currentDate = date?.split('T')[0] || date;
+    return eDate === currentDate;
+  });
+  
+  if (!entry) return '';
+  
+  if (entry.totalHours > 8) return 'day-overlimit';
+  if (entry.totalHours === 8) return 'day-exact';
+  return 'day-underlimit';
+}
+
+// Загрузка данных
 onMounted(async () => {
   await loadProjects();
   await loadTasks();
@@ -230,7 +285,11 @@ async function loadTasks() {
 async function loadTimeEntries() {
   try {
     loading.value.timeEntries = true;
-    timeEntries.value = await mockApi.getTimeEntries();
+    const entries = await mockApi.getTimeEntries();
+    timeEntries.value = entries.map(entry => ({
+      ...entry,
+      date: entry.date?.split('T')[0] || new Date(entry.date).toISOString().split('T')[0]
+    }));
   } catch (err) {
     error.value.timeEntries = err.message;
   } finally {
@@ -244,7 +303,7 @@ function viewProjectTasks(projectId) {
 }
 
 function applyFilters() {
-  // Фильтрация происходит автоматически через computed свойство
+  // Фильтрация происходит через computed свойство
 }
 
 function openCreateTimeEntryModal() {
@@ -253,7 +312,10 @@ function openCreateTimeEntryModal() {
 }
 
 function editTimeEntry(entry) {
-  currentTimeEntry.value = { ...entry };
+  currentTimeEntry.value = { 
+    ...entry,
+    date: entry.date?.split('T')[0] || new Date(entry.date).toISOString().split('T')[0]
+  };
   showTimeEntryModal.value = true;
 }
 
@@ -264,10 +326,15 @@ function closeTimeEntryModal() {
 
 async function handleTimeEntrySave(timeEntryData) {
   try {
+    const dataToSave = {
+      ...timeEntryData,
+      date: new Date(timeEntryData.date).toISOString()
+    };
+    
     if (timeEntryData.id) {
-      await mockApi.updateTimeEntry(timeEntryData.id, timeEntryData);
+      await mockApi.updateTimeEntry(timeEntryData.id, dataToSave);
     } else {
-      await mockApi.createTimeEntry(timeEntryData);
+      await mockApi.createTimeEntry(dataToSave);
     }
     await loadTimeEntries();
     closeTimeEntryModal();
@@ -297,10 +364,6 @@ function getTaskName(taskId) {
   return task ? task.title : 'Неизвестная задача';
 }
 
-function getTaskCount(projectId) {
-  return allTasks.value.filter(task => task.projectId === projectId).length;
-}
-
 function getProjectStatusName(status) {
   const statusMap = {
     active: 'Активный',
@@ -312,9 +375,8 @@ function getProjectStatusName(status) {
 
 function getTaskStatusName(status) {
   const statusMap = {
-    todo: 'К выполнению',
-    in_progress: 'В работе',
-    done: 'Завершена'
+    active: 'Активна',
+    inactive: 'Не активна'
   };
   return statusMap[status] || status;
 }
@@ -328,9 +390,42 @@ function formatDate(dateString) {
 
 <style scoped>
 .executor-view {
+   width: 100vw;
   padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
+  height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background-color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.logout-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.logout-btn:hover {
+  background-color: #bb2d3b;
 }
 
 .tabs {
@@ -357,30 +452,37 @@ function formatDate(dateString) {
 }
 
 .tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   background: white;
   border-radius: 8px;
-  padding: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
-.loading {
-  text-align: center;
-  padding: 2rem;
-  color: #666;
+.full-height-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden;
 }
 
-.error {
-  color: #dc3545;
-  padding: 1rem;
-  background-color: #f8d7da;
-  border-radius: 4px;
-  margin-bottom: 1rem;
+.projects-container,
+.tasks-container,
+.time-entries-container {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.full-width-table {
+  width: 100%;
+  table-layout: fixed;
 }
 
 .data-table {
-  width: 100%;
   border-collapse: collapse;
-  margin-top: 1rem;
 }
 
 .data-table th,
@@ -394,6 +496,8 @@ function formatDate(dateString) {
   background-color: #f8f9fa;
   font-weight: 600;
   color: #004080;
+  position: sticky;
+  top: 0;
 }
 
 .clickable-row {
@@ -420,7 +524,6 @@ function formatDate(dateString) {
   display: inline-block;
 }
 
-/* Статусы проектов */
 .status-badge.active {
   background-color: #e6f7e6;
   color: #28a745;
@@ -434,22 +537,6 @@ function formatDate(dateString) {
 .status-badge.archived {
   background-color: #f8f9fa;
   color: #6c757d;
-}
-
-/* Статусы задач */
-.status-badge.todo {
-  background-color: #f8f9fa;
-  color: #6c757d;
-}
-
-.status-badge.in_progress {
-  background-color: #e7f5ff;
-  color: #1c7ed6;
-}
-
-.status-badge.done {
-  background-color: #ebfbee;
-  color: #2b8a3e;
 }
 
 .filters {
@@ -513,14 +600,49 @@ function formatDate(dateString) {
   opacity: 0.8;
 }
 
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.error {
+  color: #dc3545;
+  padding: 1rem;
+  background-color: #f8d7da;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+/* Стили для подсветки проводок */
+.day-overlimit {
+  background-color: #ffebee;
+  border-left: 4px solid #f44336;
+}
+
+.day-exact {
+  background-color: #e8f5e9;
+  border-left: 4px solid #4caf50;
+}
+
+.day-underlimit {
+  background-color: #fff8e1;
+  border-left: 4px solid #ffc107;
+}
+
 @media (max-width: 768px) {
   .executor-view {
     padding: 10px;
+    height: calc(100vh - 20px);
   }
   
   .tabs button {
     padding: 8px 12px;
     font-size: 14px;
+  }
+  
+  .full-height-tab {
+    padding: 10px;
   }
   
   .data-table th,

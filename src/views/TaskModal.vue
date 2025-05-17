@@ -5,22 +5,35 @@
       
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="title">Название задачи</label>
+          <label for="title">Название задачи*</label>
           <input 
             type="text" 
             id="title" 
-            v-model="form.title" 
+            v-model="form.title"
+            :class="{ 'invalid': errors.title }"
             required
           >
+          <span v-if="errors.title" class="error-message">{{ errors.title }}</span>
         </div>
         
         <div class="form-group">
-          <label for="project">Проект</label>
-          <select id="project" v-model="form.projectId" required>
-            <option v-for="project in projects" :key="project.id" :value="project.id">
+          <label for="project">Проект*</label>
+          <select 
+            id="project" 
+            v-model="form.projectId"
+            :class="{ 'invalid': errors.projectId }"
+            required
+          >
+            <option value="" disabled>Выберите проект</option>
+            <option 
+              v-for="project in activeProjects" 
+              :key="project.id" 
+              :value="project.id"
+            >
               {{ project.name }} ({{ project.code }})
             </option>
           </select>
+          <span v-if="errors.projectId" class="error-message">{{ errors.projectId }}</span>
         </div>
         
         <div class="form-group">
@@ -29,21 +42,21 @@
             id="description" 
             v-model="form.description" 
             rows="4"
+            placeholder="Дополнительные детали задачи..."
           ></textarea>
         </div>
         
         <div class="form-group">
           <label for="status">Статус</label>
           <select id="status" v-model="form.status">
-            <option value="todo">К выполнению</option>
-            <option value="in_progress">В работе</option>
-            <option value="done">Завершена</option>
+            <option value="active">Активна</option>
+            <option value="inactive">Не активна</option>
           </select>
         </div>
         
         <div class="modal-actions">
           <button type="button" class="cancel-btn" @click="closeModal">Отменить</button>
-          <button type="submit" class="save-btn">
+          <button type="submit" class="save-btn" :disabled="isSubmitting">
             {{ isEditing ? 'Сохранить изменения' : 'Создать задачу' }}
           </button>
         </div>
@@ -53,13 +66,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 
 const props = defineProps({
   showModal: Boolean,
-  currentTask: Object,
+  currentTask: {
+    type: Object,
+    default: null
+  },
   isEditing: Boolean,
-  projects: Array
+  projects: {
+    type: Array,
+    default: () => []
+  }
 });
 
 const emit = defineEmits(['close', 'save']);
@@ -69,15 +88,26 @@ const form = reactive({
   title: '',
   projectId: '',
   description: '',
-  status: 'todo'
+  status: 'active'
 });
 
+const errors = reactive({
+  title: '',
+  projectId: ''
+});
+
+const isSubmitting = ref(false);
 const initialized = ref(false);
+
+// Только активные проекты
+const activeProjects = computed(() => {
+  return props.projects.filter(project => project.status === 'active');
+});
 
 watch(
   () => props.showModal,
   (visible) => {
-    if (visible && !initialized.value) {
+    if (visible) {
       if (props.currentTask) {
         Object.assign(form, {
           id: props.currentTask.id,
@@ -89,28 +119,55 @@ watch(
       } else {
         resetForm();
       }
-      initialized.value = true;
-    } else if (!visible) {
+    } else {
       resetForm();
-      initialized.value = false;
     }
   }
 );
-
 
 function resetForm() {
   Object.assign(form, {
     id: null,
     title: '',
-    projectId: props.projects.length ? props.projects[0].id : '',
+    projectId: activeProjects.value.length ? activeProjects.value[0].id : '',
     description: '',
-    status: 'todo'
+    status: 'active'
   });
+  clearErrors();
+}
+
+function clearErrors() {
+  errors.title = '';
+  errors.projectId = '';
+}
+
+function validateForm() {
+  let isValid = true;
+  clearErrors();
+
+  if (!form.title.trim()) {
+    errors.title = 'Введите название задачи';
+    isValid = false;
+  }
+
+  if (!form.projectId) {
+    errors.projectId = 'Выберите проект';
+    isValid = false;
+  }
+
+  return isValid;
 }
 
 async function handleSubmit() {
-  emit('save', { ...form });
-  closeModal();
+  if (!validateForm()) return;
+  
+  isSubmitting.value = true;
+  try {
+    await emit('save', { ...form });
+    closeModal();
+  } finally {
+    isSubmitting.value = false;
+  }
 }
 
 function closeModal() {
@@ -118,8 +175,8 @@ function closeModal() {
 }
 
 onMounted(() => {
-  if (props.projects.length && !form.projectId) {
-    form.projectId = props.projects[0].id;
+  if (activeProjects.value.length && !form.projectId) {
+    form.projectId = activeProjects.value[0].id;
   }
 });
 </script>
@@ -163,7 +220,7 @@ label {
   font-weight: 500;
 }
 
-input, select {
+input, select, textarea {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #ddd;
@@ -181,6 +238,10 @@ input.invalid, select.invalid {
   margin-top: 0.25rem;
 }
 
+textarea {
+  resize: vertical;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -194,7 +255,12 @@ button {
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .cancel-btn {
@@ -210,7 +276,7 @@ button {
   color: white;
 }
 
-.save-btn:hover {
+.save-btn:hover:not(:disabled) {
   background-color: #0056b3;
 }
 </style>

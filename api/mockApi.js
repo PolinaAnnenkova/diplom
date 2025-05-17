@@ -46,7 +46,7 @@ const DEFAULT_DATA = {
       title: 'Разработка интерфейса',
       projectId: 1,
       description: 'Создать UI компоненты',
-      status: 'in_progress'
+      status: 'active'
     }
   ],
   TIME_ENTRIES: [

@@ -15,12 +15,15 @@
           Задачи
         </button>
       </div>
-      <button 
-        @click="openCreateModal"
-        class="create-btn"
-      >
-        {{ activeTab === 'projects' ? '+ Создать проект' : '+ Создать задачу' }}
-      </button>
+      <div class="actions">
+        <button 
+          @click="openCreateModal"
+          class="create-btn"
+        >
+          {{ activeTab === 'projects' ? '+ Создать проект' : '+ Создать задачу' }}
+        </button>
+        <button @click="logout" class="logout-btn">Выйти</button>
+      </div>
     </div>
 
     <div class="tab-content">
@@ -41,9 +44,11 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import ProjectsView from '@/views/ProjectsView.vue';
 import TasksView from '@/views/TasksView.vue';
 
+const router = useRouter();
 const activeTab = ref('projects');
 const projectsView = ref(null);
 const tasksView = ref(null);
@@ -63,6 +68,18 @@ function handleProjectCreated() {
 function handleTaskCreated() {
   console.log('Новая задача создана');
 }
+
+const logout = async () => {
+  try {
+    // Очистка данных пользователя
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('currentUser');
+    // Перенаправление на страницу авторизации
+    router.push('/');
+  } catch (err) {
+    console.error('Ошибка при выходе:', err);
+  }
+};
 </script>
 
 <style scoped>
@@ -114,6 +131,12 @@ function handleTaskCreated() {
   background-color: #f0f0f0;
 }
 
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .create-btn {
   background-color: #007bff;
   color: white;
@@ -127,6 +150,21 @@ function handleTaskCreated() {
 
 .create-btn:hover {
   background-color: #0056b3;
+}
+
+.logout-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.logout-btn:hover {
+  background-color: #bb2d3b;
 }
 
 .tab-content {
@@ -152,7 +190,13 @@ function handleTaskCreated() {
     text-align: center;
   }
 
-  .create-btn {
+  .actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .create-btn,
+  .logout-btn {
     width: 100%;
   }
 }

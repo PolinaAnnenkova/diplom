@@ -174,9 +174,9 @@ function truncateDescription(description) {
 
 function getStatusName(status) {
   const statusMap = {
-    todo: 'К выполнению',
-    in_progress: 'В работе',
-    done: 'Завершена'
+    active: 'Активна',
+    inactive: 'Не активна'
+    
   };
   return statusMap[status] || status;
 }
@@ -288,20 +288,17 @@ h1 {
   font-weight: 500;
 }
 
-.status-badge.todo {
+.status-badge.active {
   background-color: #f8f9fa;
-  color: #6c757d;
+  color:#28a745 ;
 }
 
-.status-badge.in_progress {
+.status-badge.inactive {
   background-color: #fff3cd;
-  color: #d39e00;
+  color:#6c757d;
 }
 
-.status-badge.done {
-  background-color: #e6f7e6;
-  color: #28a745;
-}
+
 
 .actions {
   display: flex;
