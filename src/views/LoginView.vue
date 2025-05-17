@@ -28,6 +28,7 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import mockApi from '..//..//api/mockApi.js';
+import realApi from '..//..//api/realApi.js';
 const router = useRouter();
 
 const username = ref('');
@@ -53,13 +54,13 @@ onMounted(() => {
 });
 async function login() {
   try {
-    const response = await mockApi.login({
+    const response = await realApi.login({
       login: username.value,
       password: password.value
     });
     
     // Сохраняем токен и данные пользователя
-    sessionStorage.setItem('authToken', response.token);
+    sessionStorage.setItem('authToken', response.access_token);
     sessionStorage.setItem('currentUser', JSON.stringify(response));
     
     // Перенаправляем по роли

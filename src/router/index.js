@@ -3,6 +3,7 @@ import Login from '../views/LoginView.vue';
 import AdminPanel from '../views/AdminPanel.vue';
 import Dashboard from '../views/DashboardView.vue';
 import mockApi from '../../api/mockApi.js';
+import realApi from '../../api/realApi.js';
 import ProjectsView from '@/views/ProjectsView.vue';
 import ManagerDashboard from '@/views/ManagerDashboard.vue'
 import ExecutorView from '@/views/ExecutorView.vue';
@@ -55,7 +56,7 @@ router.beforeEach(async (to, from, next) => {
     }
     
     try {
-      const currentUser = await mockApi.getCurrentUser(authToken);
+      const currentUser = await realApi.getCurrentUser(authToken);
       
       if (to.meta.requiredRole && currentUser.role !== to.meta.requiredRole) {
         // Перенаправляем на страницу согласно роли
