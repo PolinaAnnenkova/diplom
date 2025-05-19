@@ -5,6 +5,22 @@
       <button @click="logout" class="logout-btn">Выйти</button>
       
       <div class="admin-actions">
+        <div class="search-container">
+          <input 
+            type="text" 
+            v-model="searchQuery"
+            placeholder="Поиск по имени или email..."
+            class="search-input"
+            @input="applySearch"
+          >
+          <select v-model="roleFilter" @change="applySearch" class="role-filter">
+            <option value="all">Все роли</option>
+            <option value="admin">Администратор</option>
+            <option value="manager">Менеджер</option>
+            <option value="executor">Исполнитель</option>
+          </select>
+        </div>
+        
         <button class="add-user-btn" @click="showAddModal">
           Добавить пользователя
         </button>
@@ -26,7 +42,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(user, index) in users" :key="user.id">
+            <tr v-for="(user, index) in filteredUsers" :key="user.id">
               <td>{{ index + 1 }}</td>
               <td>{{ user.name }}</td>
               <td>{{ user.age }}</td>
@@ -42,7 +58,6 @@
       </div>
     </div>
 
-    <!-- Модальное окно для добавления/редактирования -->
     <UserModal 
       :showModal="showModal"
       :currentUser="currentUser"
@@ -54,21 +69,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import mockApi from '../../api/mockApi.js';
 import UserModal from '@/views/UserModal.vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-//const toast = useToast();
+
 const router = useRouter();
 
 const users = ref([]);
+const filteredUsers = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentUser = ref(null);
+const searchQuery = ref('');
+const roleFilter = ref('all');
 
 const roleNames = {
   admin: 'Администратор',
@@ -81,6 +99,7 @@ const loadUsers = async () => {
   try {
     isLoading.value = true;
     users.value = await mockApi.getUsers();
+    filteredUsers.value = [...users.value];
   } catch (err) {
     error.value = err.message;
   } finally {
@@ -88,27 +107,41 @@ const loadUsers = async () => {
   }
 };
 
-// Показ модального окна для добавления
+// Поиск и фильтрация пользователей
+const applySearch = () => {
+  const query = searchQuery.value.toLowerCase();
+  
+  filteredUsers.value = users.value.filter(user => {
+    const matchesSearch = 
+      user.name.toLowerCase().includes(query) || 
+      user.email.toLowerCase().includes(query);
+    
+    const matchesRole = 
+      roleFilter.value === 'all' || 
+      user.role === roleFilter.value;
+    
+    return matchesSearch && matchesRole;
+  });
+};
+
+// Остальные методы остаются без изменений
 const showAddModal = () => {
   currentUser.value = null;
   isEditing.value = false;
   showModal.value = true;
 };
 
-// Показ модального окна для редактирования
 const showEditModal = (user) => {
   currentUser.value = { ...user };
   isEditing.value = true;
   showModal.value = true;
 };
 
-// Закрытие модального окна
 const closeModal = () => {
   showModal.value = false;
   currentUser.value = null;
 };
 
-// Обработка сохранения пользователя
 const handleSave = async (userData) => {
   try {
     if (isEditing.value) {
@@ -116,19 +149,18 @@ const handleSave = async (userData) => {
     } else {
       await mockApi.createUser(userData);
     }
-    await loadUsers(); // Перезагружаем список пользователей
+    await loadUsers();
     closeModal();
   } catch (err) {
     error.value = err.message;
   }
 };
 
-// Удаление пользователя
 const deleteUser = async (id) => {
   if (confirm('Вы уверены, что хотите удалить пользователя?')) {
     try {
       await mockApi.deleteUser(id);
-      await loadUsers(); // Обновляем список
+      await loadUsers();
       toast.success('Пользователь успешно удалён');
     } catch (err) {
       error.value = err.message;
@@ -136,25 +168,58 @@ const deleteUser = async (id) => {
     }
   }
 };
-// Выход из системы
+
 const logout = async () => {
-  try {
-    await mockApi.logout();
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('currentUser');
-    router.push('/');
-  } catch (err) {
-    error.value = err.message;
+  if (confirm('Вы уверены, что хотите выйти из системы?')) {
+    try {
+      await mockApi.logout();
+      sessionStorage.removeItem('authToken');
+      sessionStorage.removeItem('currentUser');
+      router.push('/');
+    } catch (err) {
+      error.value = err.message;
+    }
   }
 };
 
-// Загружаем пользователей при монтировании компонента
 onMounted(() => {
   loadUsers();
 });
 </script>
 
+
 <style scoped>
+.search-container {
+  display: flex;
+  gap: 10px;
+  margin-right: 20px;
+  flex-grow: 1;
+  max-width: 600px;
+}
+
+.search-input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  flex-grow: 1;
+  min-width: 200px;
+}
+
+.role-filter {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-width: 150px;
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .admin-page {
   position: fixed;
   top: 0;
