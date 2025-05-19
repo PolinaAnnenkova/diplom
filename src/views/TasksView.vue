@@ -15,6 +15,32 @@
         </button>
       </div>
 
+      <!-- Фильтры -->
+      <div class="filters">
+        <div class="filter-group">
+          <label>Статус задачи:</label>
+          <select v-model="statusFilter" @change="applyFilters">
+            <option value="all">Все задачи</option>
+            <option value="active">Активные</option>
+            <option value="inactive">Неактивные</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Проект:</label>
+          <select v-model="projectFilter" @change="applyFilters">
+            <option value="all">Все проекты</option>
+            <option 
+              v-for="project in projects" 
+              :key="project.id" 
+              :value="project.id"
+            >
+              {{ project.name }} ({{ project.code }})
+            </option>
+          </select>
+        </div>
+      </div>
+
       <TaskModal
         :showModal="showModal"
         :currentTask="currentTask"
@@ -37,7 +63,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="task in tasks" :key="task.id">
+            <tr v-for="task in filteredTasks" :key="task.id">
               <td>{{ task.title }}</td>
               <td>{{ getProjectName(task.projectId) }}</td>
               <td class="description-cell">{{ truncateDescription(task.description) }}</td>
@@ -77,6 +103,7 @@ import TaskModal from '@/views/TaskModal.vue';
 import mockApi from '@/../api/mockApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+
 const router = useRouter();
 const props = defineProps({
   projectId: String
@@ -84,11 +111,8 @@ const props = defineProps({
 
 const emit = defineEmits(['back']);
 
-// Получаем роль пользователя (в реальном приложении из хранилища)
 const userRole = computed(() => {
-  // Замените на реальное получение роли, например:
-  // return useAuthStore().user.role;
-  return localStorage.getItem('userRole') || 'manager'; // временно по умолчанию менеджер
+  return localStorage.getItem('userRole') || 'manager';
 });
 
 const tasks = ref([]);
@@ -96,6 +120,27 @@ const projects = ref([]);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentTask = ref(null);
+
+// Фильтры
+const statusFilter = ref('all');
+const projectFilter = ref(props.projectId || 'all');
+
+// Фильтрация задач
+const filteredTasks = computed(() => {
+  let result = [...tasks.value];
+
+  // Фильтр по статусу
+  if (statusFilter.value !== 'all') {
+    result = result.filter(task => task.status === statusFilter.value);
+  }
+
+  // Фильтр по проекту
+  if (projectFilter.value !== 'all') {
+    result = result.filter(task => task.projectId === projectFilter.value);
+  }
+
+  return result;
+});
 
 onMounted(async () => {
   await loadProjects();
@@ -107,7 +152,18 @@ async function loadProjects() {
 }
 
 async function loadTasks() {
-  tasks.value = await mockApi.getTasks();
+  const allTasks = await mockApi.getTasks();
+  
+  // Если передан projectId, фильтруем задачи сразу
+  if (props.projectId) {
+    tasks.value = allTasks.filter(task => task.projectId === props.projectId);
+  } else {
+    tasks.value = allTasks;
+  }
+}
+
+function applyFilters() {
+  // Фильтрация происходит через computed свойство filteredTasks
 }
 
 function openCreateModal() {
@@ -179,7 +235,6 @@ function getStatusName(status) {
   const statusMap = {
     active: 'Активна',
     inactive: 'Не активна'
-    
   };
   return statusMap[status] || status;
 }
@@ -218,6 +273,30 @@ function getStatusName(status) {
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.filters {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-group label {
+  font-weight: 500;
+}
+
+.filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-width: 200px;
 }
 
 h1 {
@@ -301,8 +380,6 @@ h1 {
   color:#6c757d;
 }
 
-
-
 .actions {
   display: flex;
   gap: 0.5rem;
@@ -347,6 +424,16 @@ h1 {
 @media (max-width: 768px) {
   .tasks-container {
     padding: 1rem;
+  }
+
+  .filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .tasks-table th,

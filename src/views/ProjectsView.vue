@@ -1,6 +1,13 @@
-
 <template>
   <div class="projects-view">
+    <div class="filters">
+      <select v-model="statusFilter" @change="applyFilters">
+        <option value="all">Все проекты</option>
+        <option value="active">Активные</option>
+        <option value="inactive">Неактивные</option>
+      </select>
+    </div>
+
     <div v-if="isLoading" class="loading">Загрузка...</div>
     <div v-if="error" class="error">{{ error }}</div>
 
@@ -24,7 +31,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="project in projects" :key="project.id">
+          <tr v-for="project in filteredProjects" :key="project.id">
             <td>{{ project.name }}</td>
             <td>{{ project.code }}</td>
             <td>
@@ -44,17 +51,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import ProjectModal from '@/views/ProjectModal.vue';
 import mockApi from '../../api/mockApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+
 const projects = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentProject = ref(null);
+const statusFilter = ref('all');
+
+const filteredProjects = computed(() => {
+  if (statusFilter.value === 'all') {
+    return projects.value;
+  }
+  return projects.value.filter(project => project.status === statusFilter.value);
+});
 
 onMounted(async () => {
   await loadProjects();
@@ -69,6 +85,10 @@ async function loadProjects() {
   } finally {
     isLoading.value = false;
   }
+}
+
+function applyFilters() {
+  // Фильтрация происходит через computed свойство filteredProjects
 }
 
 function openCreateModal() {
@@ -120,7 +140,6 @@ function getStatusName(status) {
   const statusMap = {
     active: 'Активный',
     inactive: 'Неактивный'
-    
   };
   return statusMap[status] || status;
 }
@@ -133,6 +152,17 @@ defineExpose({
 <style scoped>
 .projects-view {
   width: 100%;
+}
+
+.filters {
+  margin-bottom: 20px;
+}
+
+.filters select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
 }
 
 .loading {
@@ -191,8 +221,6 @@ defineExpose({
   background-color: #fff3cd;
   color: #d39e00;
 }
-
-
 
 .actions {
   display: flex;

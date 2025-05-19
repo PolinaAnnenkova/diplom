@@ -1,5 +1,5 @@
 <template>
-   <div class="executor-view">
+  <div class="executor-view">
     <div class="header">
       <div class="tabs">
         <button 
@@ -27,6 +27,15 @@
     <div class="tab-content">
       <!-- Вкладка проектов -->
       <div v-if="activeTab === 'projects'" class="projects-tab full-height-tab">
+        <div class="filters">
+          <select v-model="projectActivityFilter" @change="applyProjectFilters">
+            <option value="all">Все проекты</option>
+            <option value="active">Активные</option>
+            <option value="inactive">Неактивные</option>
+            
+          </select>
+        </div>
+
         <div v-if="loading.projects" class="loading">Загрузка проектов...</div>
         <div v-else-if="error.projects" class="error">{{ error.projects }}</div>
         <div v-else class="projects-container">
@@ -40,7 +49,7 @@
             </thead>
             <tbody>
               <tr 
-                v-for="project in projects" 
+                v-for="project in filteredProjects" 
                 :key="project.id"
                 @click="viewProjectTasks(project.id)"
                 class="clickable-row"
@@ -108,12 +117,28 @@
       </div>
 
       <!-- Вкладка проводок -->
-      <div v-else class="time-entries-tab full-height-tab">
-        <div class="time-entries-header">
-          <button @click="openCreateTimeEntryModal" class="add-button">
-            + Новая проводка
-          </button>
-        </div>
+     <div v-else class="time-entries-tab full-height-tab">
+    <div class="time-entries-header">
+      <div class="filters">
+        <select v-model="timeEntriesPeriod" @change="applyTimeEntriesFilter">
+          <option value="all">За все время</option>
+          <option value="month">За текущий месяц</option>
+          <option value="week">За текущую неделю</option>
+          <option value="custom">Выбрать дату</option>
+        </select>
+        
+        <input 
+          v-if="timeEntriesPeriod === 'custom'"
+          type="date" 
+          v-model="selectedDate"
+          @change="applyTimeEntriesFilter"
+        >
+      </div>
+      
+      <button @click="openCreateTimeEntryModal" class="add-button">
+        + Новая проводка
+      </button>
+    </div>
 
         <TimeEntryModal
           v-if="showTimeEntryModal"
@@ -127,29 +152,29 @@
         <div v-if="loading.timeEntries" class="loading">Загрузка проводок...</div>
         <div v-else-if="error.timeEntries" class="error">{{ error.timeEntries }}</div>
         <div v-else class="time-entries-container">
-          <table class="data-table full-width-table">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Задача</th>
-                <th>Часы</th>
-                <th>Описание</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr 
-                v-for="entry in groupedTimeEntries" 
-                :key="entry.id"
-                :class="getDayRowClass(entry.date)"
-              >
-                <td>{{ formatDate(entry.date) }}</td>
-                <td>{{ getTaskName(entry.taskId) }}</td>
-                <td>{{ entry.hours }}</td>
-                <td class="description-cell">{{ entry.description || '-' }}</td>
-                <td class="actions">
-                  <button @click="editTimeEntry(entry)" class="edit-btn">✏️</button>
-                  <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
+      <table class="data-table full-width-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Задача</th>
+            <th>Часы</th>
+            <th>Описание</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            v-for="entry in filteredTimeEntries" 
+            :key="entry.id"
+            :class="getEntryRowClass(entry)"
+          >
+            <td>{{ formatDate(entry.date) }}</td>
+            <td>{{ getTaskName(entry.taskId) }}</td>
+            <td>{{ entry.hours }}</td>
+            <td class="description-cell">{{ entry.description || '-' }}</td>
+            <td class="actions">
+              <button @click="editTimeEntry(entry)" class="edit-btn">✏️</button>
+              <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
                 </td>
               </tr>
             </tbody>
@@ -167,20 +192,10 @@ import TimeEntryModal from '@/views/TimeEntryModal.vue';
 import { useRouter } from 'vue-router';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+
 const router = useRouter();
 
-const logout = async () => {
-  try {
-    // Очистка данных пользователя
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('currentUser');
-    // Перенаправление на страницу авторизации
-    router.push('/');
-  } catch (err) {
-    console.error('Ошибка при выходе:', err);
-  }
-};
-
+// Основные данные
 const activeTab = ref('tasks');
 const projects = ref([]);
 const allTasks = ref([]);
@@ -195,8 +210,21 @@ const error = ref({
   tasks: null,
   timeEntries: null
 });
+
+// Фильтры для проектов
+const projectActivityFilter = ref('all');
+const filteredProjects = computed(() => {
+  if (projectActivityFilter.value === 'all') return projects.value;
+  return projects.value.filter(p => p.status === projectActivityFilter.value);
+});
+
+// Фильтры для задач
 const currentProjectFilter = ref('');
 const currentStatusFilter = ref('');
+
+// Фильтры для проводок
+const timeEntriesPeriod = ref('all');
+const selectedDate = ref(new Date().toISOString().split('T')[0]);
 const showTimeEntryModal = ref(false);
 const currentTimeEntry = ref(null);
 
@@ -215,11 +243,82 @@ const filteredTasks = computed(() => {
   return tasks;
 });
 
+
+// Подсчет общего количества часов для дня проводки
+function getDayTotalHours(date) {
+  const dateStr = new Date(date).toISOString().split('T')[0];
+  return filteredTimeEntries.value
+    .filter(entry => {
+      const entryDate = new Date(entry.date).toISOString().split('T')[0];
+      return entryDate === dateStr;
+    })
+    .reduce((sum, entry) => sum + parseFloat(entry.hours || 0), 0);
+}
+
+// Определение класса строки для каждой проводки
+function getEntryRowClass(entry) {
+  const dayHours = getDayTotalHours(entry.date);
+  
+  if (dayHours > 8) return 'day-overlimit';
+  if (dayHours === 8) return 'day-exact';
+  return 'day-underlimit';
+}
+// Фильтрация проводок по периоду
+
+const filteredTimeEntries = computed(() => {
+  let entries = [...timeEntries.value];
+  
+  if (timeEntriesPeriod.value === 'all') {
+    return entries;
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Приводим даты к единому формату для сравнения (YYYY-MM-DD)
+  const formatDateForComparison = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const todayFormatted = formatDateForComparison(today);
+
+  switch (timeEntriesPeriod.value) {
+    case 'month':
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstDayOfMonthFormatted = formatDateForComparison(firstDayOfMonth);
+      
+      return entries.filter(entry => {
+        const entryDateFormatted = formatDateForComparison(entry.date);
+        return entryDateFormatted >= firstDayOfMonthFormatted && entryDateFormatted <= todayFormatted;
+      });
+      
+    case 'week':
+      // Получаем первый день недели (понедельник)
+      const firstDayOfWeek = new Date(today);
+      firstDayOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+      const firstDayOfWeekFormatted = formatDateForComparison(firstDayOfWeek);
+      
+      return entries.filter(entry => {
+        const entryDateFormatted = formatDateForComparison(entry.date);
+        return entryDateFormatted >= firstDayOfWeekFormatted && entryDateFormatted <= todayFormatted;
+      });
+      
+    case 'custom':
+      return entries.filter(entry => {
+        const entryDateFormatted = formatDateForComparison(entry.date);
+        return entryDateFormatted === selectedDate.value;
+      });
+      
+    default:
+      return entries;
+  }
+});
 // Группировка проводок по дням с подсчетом суммы часов
 const groupedTimeEntries = computed(() => {
   const grouped = {};
   
-  timeEntries.value.forEach(entry => {
+  filteredTimeEntries.value.forEach(entry => {
     const date = entry.date?.split('T')[0] || entry.date;
     if (!grouped[date]) {
       grouped[date] = {
@@ -241,16 +340,16 @@ const groupedTimeEntries = computed(() => {
 
 // Определение класса строки в зависимости от суммы часов
 function getDayRowClass(date) {
-  const entry = groupedTimeEntries.value.find(e => {
-    const eDate = e.date?.split('T')[0] || e.date;
+  const dayEntries = filteredTimeEntries.value.filter(entry => {
+    const eDate = entry.date?.split('T')[0] || entry.date;
     const currentDate = date?.split('T')[0] || date;
     return eDate === currentDate;
   });
-  
-  if (!entry) return '';
-  
-  if (entry.totalHours > 8) return 'day-overlimit';
-  if (entry.totalHours === 8) return 'day-exact';
+
+  const totalHours = dayEntries.reduce((sum, entry) => sum + (parseFloat(entry.hours) || 0), 0);
+
+  if (totalHours > 8) return 'day-overlimit';
+  if (totalHours === 8) return 'day-exact';
   return 'day-underlimit';
 }
 
@@ -307,6 +406,14 @@ function applyFilters() {
   // Фильтрация происходит через computed свойство
 }
 
+function applyProjectFilters() {
+  // Фильтрация происходит через computed свойство
+}
+
+function applyTimeEntriesFilter() {
+  // Фильтрация происходит через computed свойство
+}
+
 function openCreateTimeEntryModal() {
   currentTimeEntry.value = null;
   showTimeEntryModal.value = true;
@@ -349,7 +456,7 @@ async function deleteTimeEntry(id) {
     try {
       await mockApi.deleteTimeEntry(id);
       await loadTimeEntries();
-        toast.success('Проводка успешна удалена');
+      toast.success('Проводка успешна удалена');
     } catch (err) {
       error.value.timeEntries = err.message;
       toast.error('Ошибка при удалении проводки');
@@ -370,8 +477,8 @@ function getTaskName(taskId) {
 function getProjectStatusName(status) {
   const statusMap = {
     active: 'Активный',
-    inactive: 'Неактивный',
-    archived: 'Архивированный'
+    inactive: 'Неактивный'
+    
   };
   return statusMap[status] || status;
 }
@@ -389,16 +496,25 @@ function formatDate(dateString) {
   const options = { day: 'numeric', month: 'short', year: 'numeric' };
   return new Date(dateString).toLocaleDateString('ru-RU', options);
 }
+
+const logout = async () => {
+  try {
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('currentUser');
+    router.push('/');
+  } catch (err) {
+    console.error('Ошибка при выходе:', err);
+  }
+};
 </script>
 
 <style scoped>
 .executor-view {
-   width: 100vw;
+  width: 100vw;
   padding: 20px;
   height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
-  
 }
 .header {
   display: flex;
@@ -537,15 +653,13 @@ function formatDate(dateString) {
   color: #d39e00;
 }
 
-.status-badge.archived {
-  background-color: #f8f9fa;
-  color: #6c757d;
-}
+
 
 .filters {
   display: flex;
   gap: 15px;
   margin-bottom: 20px;
+  align-items: center;
 }
 
 .filters select {
@@ -555,9 +669,16 @@ function formatDate(dateString) {
   background-color: white;
 }
 
+.filters input[type="date"] {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
 .time-entries-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
@@ -656,6 +777,12 @@ function formatDate(dateString) {
   
   .filters {
     flex-direction: column;
+    gap: 10px;
+  }
+  
+  .time-entries-header {
+    flex-direction: column;
+    align-items: flex-start;
     gap: 10px;
   }
 }

@@ -53,7 +53,7 @@
         </div>
 
         <div class="form-group">
-          <label for="description">Описаниеttttttt</label>
+          <label for="description">Описание</label>
           <textarea
             id="description"
             v-model="form.description"
