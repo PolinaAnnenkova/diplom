@@ -148,16 +148,19 @@ function validateForm() {
 
   if (!form.title.trim()) {
     errors.title = 'Введите название задачи';
+    toast.error('Название задачи обязательно');
     isValid = false;
   }
 
   if (!form.projectId) {
     errors.projectId = 'Выберите проект';
+    toast.error('Проект обязателен для выбора');
     isValid = false;
   }
 
   return isValid;
 }
+
 
 async function handleSubmit() {
   if (!validateForm()) return;
@@ -165,11 +168,20 @@ async function handleSubmit() {
   isSubmitting.value = true;
   try {
     await emit('save', { ...form });
+    
+    // Показываем toast в зависимости от режима
+    if (props.isEditing) {
+      toast.success('Задача успешно отредактирована');
+    } else {
+      toast.success('Задача успешно создана');
+    }
+
     closeModal();
   } finally {
     isSubmitting.value = false;
   }
 }
+
 
 function closeModal() {
   emit('close');

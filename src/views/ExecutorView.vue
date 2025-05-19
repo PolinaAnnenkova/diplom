@@ -165,7 +165,8 @@ import { ref, onMounted, computed } from 'vue';
 import mockApi from '@/../api/mockApi.js';
 import TimeEntryModal from '@/views/TimeEntryModal.vue';
 import { useRouter } from 'vue-router';
-
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 const router = useRouter();
 
 const logout = async () => {
@@ -348,8 +349,10 @@ async function deleteTimeEntry(id) {
     try {
       await mockApi.deleteTimeEntry(id);
       await loadTimeEntries();
+        toast.success('Проводка успешна удалена');
     } catch (err) {
       error.value.timeEntries = err.message;
+      toast.error('Ошибка при удалении проводки');
     }
   }
 }

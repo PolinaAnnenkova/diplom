@@ -75,7 +75,8 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import TaskModal from '@/views/TaskModal.vue';
 import mockApi from '@/../api/mockApi.js';
-
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 const router = useRouter();
 const props = defineProps({
   projectId: String
@@ -151,8 +152,10 @@ async function deleteTask(id) {
     try {
       await mockApi.deleteTask(id);
       tasks.value = tasks.value.filter(task => task.id !== id);
+      toast.success('Задача успешно удалена');
     } catch (error) {
       console.error('Ошибка удаления задачи:', error);
+      toast.error('Ошибка при удалении задачи');
     }
   }
 }

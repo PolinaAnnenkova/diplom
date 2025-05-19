@@ -53,7 +53,7 @@
         </div>
 
         <div class="form-group">
-          <label for="description">Описание</label>
+          <label for="description">Описаниеttttttt</label>
           <textarea
             id="description"
             v-model="form.description"
@@ -75,7 +75,8 @@
 
 <script setup>
 import { ref, reactive, computed, watch } from 'vue';
-
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 const props = defineProps({
   show: Boolean,
   tasks: {
@@ -106,13 +107,12 @@ const errors = reactive({
 
 const isSubmitting = ref(false);
 
-// Добавляем вычисляемое свойство для максимальной допустимой даты (сегодня)
 const maxDate = computed(() => {
   const today = new Date();
+   today.setDate(today.getDate());
   return today.toISOString().split('T')[0];
 });
 
-// Фильтруем только активные задачи
 const activeTasks = computed(() => {
   return props.tasks.filter(task => task.status === 'active');
 });
@@ -154,8 +154,8 @@ function validateForm() {
   } else {
     const selectedDate = new Date(form.date);
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
+    today.setHours(23, 59, 59, 999);
+
     if (selectedDate > today) {
       errors.date = 'Нельзя выбирать дату в будущем';
       isValid = false;
@@ -175,12 +175,32 @@ function validateForm() {
   return isValid;
 }
 
-function handleSubmit() {
-  if (!validateForm()) return;
-  
+async function handleSubmit() {
+  // Сначала валидация
+  if (!validateForm()) {
+    // Показываем все ошибки
+    if (errors.date) toast.error(errors.date);
+    if (errors.taskId) toast.error(errors.taskId);
+    if (errors.hours) toast.error(errors.hours);
+    return;
+  }
+
   isSubmitting.value = true;
-  emit('save', { ...form });
-  close();
+  
+  try {
+    emit('save', { ...form });
+    toast.success(
+      props.currentEntry ? "Проводка успешно обновлена!" : "Проводка успешно создана!",
+      { autoClose: 2000 }
+    );
+    
+    // Даем время показать уведомление перед закрытием
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    close();
+  } catch (error) {
+    toast.error("Произошла ошибка при сохранении");
+    isSubmitting.value = false;
+  }
 }
 
 function close() {
@@ -188,6 +208,7 @@ function close() {
   emit('close');
 }
 </script>
+
 
 <style scoped>
 .modal-overlay {
