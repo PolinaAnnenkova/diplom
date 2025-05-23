@@ -39,6 +39,20 @@
             </option>
           </select>
         </div>
+
+        <div class="filter-group" v-if="userRole === 'executor'">
+          <label>Мои компетенции:</label>
+          <select v-model="competenceFilter" @change="applyFilters">
+            <option value="all">Все задачи</option>
+            <option 
+              v-for="competence in userCompetencies" 
+              :key="competence.id" 
+              :value="competence.id"
+            >
+              {{ competence.name }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <TaskModal
@@ -46,6 +60,7 @@
         :currentTask="currentTask"
         :isEditing="isEditing"
         :projects="projects"
+        :competencies="competencies"
         @close="closeModal"
         @save="handleSave"
         v-if="userRole === 'manager'"
@@ -58,6 +73,7 @@
               <th>Название</th>
               <th>Проект</th>
               <th>Описание</th>
+              <th>Требуемые компетенции</th>
               <th>Статус</th>
               <th>Действия</th>
             </tr>
@@ -67,6 +83,18 @@
               <td>{{ task.title }}</td>
               <td>{{ getProjectName(task.projectId) }}</td>
               <td class="description-cell">{{ truncateDescription(task.description) }}</td>
+              <td>
+                <div v-if="task.requiredCompetencies && task.requiredCompetencies.length">
+                  <span 
+                    v-for="compId in task.requiredCompetencies" 
+                    :key="compId"
+                    class="competence-badge"
+                  >
+                    {{ getCompetenceName(compId) }}
+                  </span>
+                </div>
+                <span v-else class="no-competencies">Не указаны</span>
+              </td>
               <td>
                 <span :class="['status-badge', task.status]">
                   {{ getStatusName(task.status) }}
@@ -84,6 +112,8 @@
                   @click="openTimeEntries(task.id)" 
                   class="time-entry-btn"
                   v-if="userRole === 'executor'"
+                  :disabled="!canWorkOnTask(task)"
+                  :title="canWorkOnTask(task) ? '' : 'У вас нет нужных компетенций'"
                 >
                   ⏱️ Проводки
                 </button>
@@ -115,8 +145,14 @@ const userRole = computed(() => {
   return localStorage.getItem('userRole') || 'manager';
 });
 
+const userId = computed(() => {
+  return localStorage.getItem('userId');
+});
+
 const tasks = ref([]);
 const projects = ref([]);
+const competencies = ref([]);
+const currentUser = ref(null);
 const showModal = ref(false);
 const isEditing = ref(false);
 const currentTask = ref(null);
@@ -124,6 +160,47 @@ const currentTask = ref(null);
 // Фильтры
 const statusFilter = ref('all');
 const projectFilter = ref(props.projectId || 'all');
+const competenceFilter = ref('all');
+
+// Загрузка данных
+onMounted(async () => {
+  await loadProjects();
+  await loadCompetencies();
+  await loadCurrentUser();
+  await loadTasks();
+});
+
+async function loadCurrentUser() {
+  if (userId.value) {
+    currentUser.value = await mockApi.getUserById(parseInt(userId.value));
+  }
+}
+
+async function loadProjects() {
+  projects.value = await mockApi.getProjects();
+}
+
+async function loadCompetencies() {
+  competencies.value = await mockApi.getCompetencies();
+}
+
+async function loadTasks() {
+  const allTasks = await mockApi.getTasks();
+  
+  if (props.projectId) {
+    tasks.value = allTasks.filter(task => task.projectId === props.projectId);
+  } else {
+    tasks.value = allTasks;
+  }
+}
+
+// Компетенции текущего пользователя
+const userCompetencies = computed(() => {
+  if (!currentUser.value || !currentUser.value.competencies) return [];
+  return competencies.value.filter(comp => 
+    currentUser.value.competencies.includes(comp.id)
+  );
+});
 
 // Фильтрация задач
 const filteredTasks = computed(() => {
@@ -139,31 +216,29 @@ const filteredTasks = computed(() => {
     result = result.filter(task => task.projectId === projectFilter.value);
   }
 
+  // Фильтр по компетенциям (для исполнителя)
+  if (userRole.value === 'executor' && competenceFilter.value !== 'all') {
+    result = result.filter(task => 
+      task.requiredCompetencies && 
+      task.requiredCompetencies.includes(competenceFilter.value)
+    );
+  }
+
   return result;
 });
 
-onMounted(async () => {
-  await loadProjects();
-  await loadTasks();
-});
-
-async function loadProjects() {
-  projects.value = await mockApi.getProjects();
-}
-
-async function loadTasks() {
-  const allTasks = await mockApi.getTasks();
-  
-  // Если передан projectId, фильтруем задачи сразу
-  if (props.projectId) {
-    tasks.value = allTasks.filter(task => task.projectId === props.projectId);
-  } else {
-    tasks.value = allTasks;
-  }
-}
-
 function applyFilters() {
   // Фильтрация происходит через computed свойство filteredTasks
+}
+
+function canWorkOnTask(task) {
+  if (userRole.value !== 'executor') return true;
+  if (!task.requiredCompetencies || !task.requiredCompetencies.length) return true;
+  if (!currentUser.value?.competencies) return false;
+  
+  return task.requiredCompetencies.some(compId => 
+    currentUser.value.competencies.includes(compId)
+  );
 }
 
 function openCreateModal() {
@@ -223,6 +298,11 @@ function openTimeEntries(taskId) {
 function getProjectName(projectId) {
   const project = projects.value.find(p => p.id === projectId);
   return project ? `${project.name} (${project.code})` : '';
+}
+
+function getCompetenceName(compId) {
+  const competence = competencies.value.find(c => c.id === compId);
+  return competence ? competence.name : `Неизвестно (${compId})`;
 }
 
 function truncateDescription(description) {
@@ -363,6 +443,22 @@ h1 {
   text-overflow: ellipsis;
 }
 
+.competence-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background-color: #e9ecef;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: #495057;
+}
+
+.no-competencies {
+  color: #6c757d;
+  font-style: italic;
+}
+
 .status-badge {
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
@@ -415,9 +511,15 @@ h1 {
   transition: opacity 0.3s ease;
 }
 
+.time-entry-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .edit-btn:hover, 
 .delete-btn:hover,
-.time-entry-btn:hover {
+.time-entry-btn:hover:not(:disabled) {
   opacity: 0.8;
 }
 

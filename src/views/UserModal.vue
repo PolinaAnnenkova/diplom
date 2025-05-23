@@ -62,17 +62,32 @@
         
         <div class="form-group">
           <label for="role">Роль</label>
-          <select id="role" v-model="form.role">
+          <select id="role" v-model="form.role" @change="handleRoleChange">
             <option value="admin">Администратор</option>
             <option value="manager">Менеджер</option>
             <option value="executor">Исполнитель</option>
           </select>
         </div>
         
+        <!-- Блок выбора компетенций (только для исполнителей) -->
+        <div class="form-group" v-if="showCompetencies">
+          <label>Компетенции исполнителя</label>
+          <div class="competencies-checkboxes">
+            <label v-for="competency in competencies" :key="competency.id">
+              <input
+                type="checkbox"
+                v-model="selectedCompetencies"
+                :value="competency.id"
+              >
+              {{ competency.name }}
+            </label>
+          </div>
+        </div>
+        
         <div class="modal-actions">
           <button type="button" class="cancel-btn" @click="closeModal">Отменить</button>
-          <button type="submit" class="save-btn">
-            {{ isEditing ? 'Сохранить изменения' : 'Добавить пользователя' }}
+          <button type="submit" class="save-btn" :disabled="isSubmitting">
+            {{ isSubmitting ? 'Сохранение...' : isEditing ? 'Сохранить изменения' : 'Добавить пользователя' }}
           </button>
         </div>
       </form>
@@ -80,16 +95,15 @@
   </div>
 </template>
 
-
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, onMounted } from 'vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-
+import mockApi from '@/../api/mockApi.js';
 
 const props = defineProps({
   showModal: Boolean,
-  currentUser: Object,
+  currentItem: Object,
   isEditing: Boolean
 });
 
@@ -102,7 +116,8 @@ const form = reactive({
   login: '',
   password: '',
   email: '',
-  role: 'user'
+  role: 'user',
+  competencies: []
 });
 
 const errors = reactive({
@@ -114,30 +129,28 @@ const errors = reactive({
 });
 
 const isSubmitting = ref(false);
+const competencies = ref([]);
+const selectedCompetencies = ref([]);
+const showCompetencies = ref(false);
 
-// Следим за текущим пользователем
-watch(() => props.currentUser, (newVal) => {
-  if (newVal) {
-    Object.assign(form, {
-      id: newVal.id,
-      name: newVal.name,
-      age: newVal.age,
-      login: newVal.login,
-      password: '',
-      email: newVal.email,
-      role: newVal.role
-    });
-  } else {
-    resetForm();
+// Загрузка компетенций при монтировании
+onMounted(async () => {
+  try {
+    competencies.value = await mockApi.getCompetencies();
+  } catch (err) {
+    console.error('Ошибка загрузки компетенций:', err);
+    toast.error('Не удалось загрузить список компетенций');
   }
-}, { immediate: true });
-
-// Сброс формы при закрытии модалки
-watch(() => props.showModal, (visible) => {
-  if (!visible) resetForm();
 });
 
-function resetForm() {
+// Обработчик изменения роли
+const handleRoleChange = () => {
+  showCompetencies.value = form.role === 'executor';
+  if (form.role !== 'executor') {
+    selectedCompetencies.value = [];
+  }
+};
+const resetForm = () => {
   Object.assign(form, {
     id: null,
     name: '',
@@ -145,77 +158,86 @@ function resetForm() {
     login: '',
     password: '',
     email: '',
-    role: 'user'
+    role: 'user',
+    competencies: []
   });
+  selectedCompetencies.value = [];
+  showCompetencies.value = false;
   Object.keys(errors).forEach(key => errors[key] = '');
-}
+};
 
-function validate() {
+// Следим за текущим пользователем
+watch(
+  [() => props.showModal, () => props.currentItem],
+  ([visible, user]) => {
+    if (visible && user && props.isEditing) {
+      Object.assign(form, {
+        id: user.id,
+        name: user.name,
+        age: user.age,
+        login: user.login,
+        password: '',
+        email: user.email,
+        role: user.role,
+        competencies: user.competencies || []
+      });
+      
+      // Загружаем выбранные компетенции для исполнителя
+      if (user.role === 'executor' && user.competencies) {
+        selectedCompetencies.value = [...user.competencies];
+      }
+      showCompetencies.value = user.role === 'executor';
+    } else if (!visible) {
+      resetForm();
+    }
+  },
+  { immediate: true }
+);
+
+// Сброс формы
+
+
+// Валидация формы
+const validate = () => {
   let isValid = true;
-
-  if (!form.name.trim()) {
-    errors.name = 'ФИО обязательно';
-    toast.error(errors.name);
+  errors.name = !form.name.trim() ? 'ФИО обязательно' : '';
+  errors.age = !form.age ? 'Возраст обязателен' : 
+               (form.age < 14 || form.age > 120) ? 'Возраст 14-120 лет' : '';
+  errors.login = !form.login.trim() ? 'Логин обязателен' : '';
+  errors.password = !props.isEditing && !form.password ? 'Пароль обязателен' :
+                   (form.password && form.password.length < 6) ? 'Минимум 6 символов' : '';
+  errors.email = !form.email.trim() ? 'Email обязателен' :
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? 'Некорректный email' : '';
+  
+  // Дополнительная валидация для исполнителей
+  if (form.role === 'executor' && selectedCompetencies.value.length === 0) {
+    toast.error('Выберите хотя бы одну компетенцию для исполнителя');
     isValid = false;
-  } else {
-    errors.name = '';
   }
 
-  if (form.age === null || form.age === '') {
-    errors.age = 'Возраст обязателен';
-    toast.error(errors.age);
-    isValid = false;
-  } else if (form.age < 14 || form.age > 120) {
-    errors.age = 'Возраст 14-120 лет';
-    toast.error(errors.age);
-    isValid = false;
-  } else {
-    errors.age = '';
-  }
-
-  if (!form.login.trim()) {
-    errors.login = 'Логин обязателен';
-    toast.error(errors.login);
-    isValid = false;
-  } else {
-    errors.login = '';
-  }
-
-  if (!props.isEditing && !form.password) {
-    errors.password = 'Пароль обязателен';
-    toast.error(errors.password);
-    isValid = false;
-  } else if (form.password && form.password.length < 6) {
-    errors.password = 'Минимум 6 символов';
-    toast.error(errors.password);
-    isValid = false;
-  } else {
-    errors.password = '';
-  }
-
-  if (!form.email.trim()) {
-    errors.email = 'Email обязателен';
-    toast.error(errors.email);
-    isValid = false;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = 'Некорректный email';
-    toast.error(errors.email);
-    isValid = false;
-  } else {
-    errors.email = '';
-  }
+  // Проверяем все ошибки
+  Object.values(errors).forEach(error => {
+    if (error) {
+      toast.error(error);
+      isValid = false;
+    }
+  });
 
   return isValid;
-}
+};
 
-
-async function handleSubmit() {
+// Обработка отправки формы
+const handleSubmit = async () => {
   if (!validate()) return;
 
   isSubmitting.value = true;
 
   try {
-    const dataToSave = { ...form };
+    const dataToSave = { 
+      ...form,
+      competencies: form.role === 'executor' ? selectedCompetencies.value : []
+    };
+
     if (props.isEditing && !dataToSave.password) {
       delete dataToSave.password;
     }
@@ -224,7 +246,6 @@ async function handleSubmit() {
     resetForm();
     closeModal();
 
-    // ✅ Уведомление об успешной операции
     toast.success(props.isEditing 
       ? 'Пользователь успешно обновлён' 
       : 'Пользователь добавлен');
@@ -234,12 +255,13 @@ async function handleSubmit() {
   } finally {
     isSubmitting.value = false;
   }
-}
+};
 
-function closeModal() {
+// Закрытие модалки
+const closeModal = () => {
   resetForm();
   emit('close');
-}
+};
 </script>
 
 <style scoped>
@@ -299,6 +321,29 @@ input.invalid, select.invalid {
   margin-top: 0.25rem;
 }
 
+.competencies-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.competencies-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.competencies-checkboxes input[type="checkbox"] {
+  width: auto;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -330,5 +375,10 @@ button {
 
 .save-btn:hover {
   background-color: #0056b3;
+}
+
+.save-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 </style>

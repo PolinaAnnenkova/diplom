@@ -66,55 +66,72 @@
           </table>
         </div>
       </div>
+<!-- Вкладка задач -->
+<div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
+  <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
+  <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
+  <div v-else class="tasks-container">
+    <div class="filters">
+      <select v-model="currentProjectFilter" @change="applyFilters">
+        <option value="">Все проекты</option>
+        <option 
+          v-for="project in projects" 
+          :key="project.id" 
+          :value="project.id"
+        >
+          {{ project.name }} ({{ project.code }})
+        </option>
+      </select>
+      
+      <select v-model="currentStatusFilter" @change="applyFilters">
+        <option value="">Все статусы</option>
+        <option value="active">Активна</option>
+        <option value="inactive">Не активна</option>
+      </select>
+    </div>
 
-      <!-- Вкладка задач -->
-      <div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
-        <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
-        <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
-        <div v-else class="tasks-container">
-          <div class="filters">
-            <select v-model="currentProjectFilter" @change="applyFilters">
-              <option value="">Все проекты</option>
-              <option 
-                v-for="project in projects" 
-                :key="project.id" 
-                :value="project.id"
-              >
-                {{ project.name }} ({{ project.code }})
-              </option>
-            </select>
-            
-            <select v-model="currentStatusFilter" @change="applyFilters">
-              <option value="">Все статусы</option>
-              <option value="active">Активна</option>
-              <option value="inactive">Не активна</option>
-            </select>
-          </div>
-
-          <table class="data-table full-width-table">
-            <thead>
-              <tr>
-                <th>Название</th>
-                <th>Проект</th>
-                <th>Описание</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="task in filteredTasks" :key="task.id">
-                <td>{{ task.title }}</td>
-                <td>{{ getProjectName(task.projectId) }}</td>
-                <td class="description-cell">{{ task.description || '-' }}</td>
-                <td>
-                  <span :class="['status-badge', task.status]">
-                    {{ getTaskStatusName(task.status) }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+    <table class="data-table full-width-table">
+      <thead>
+        <tr>
+          <th>Название</th>
+          <th>Проект</th>
+          <th>Описание</th>
+          <th>Требуемые компетенции</th>
+          <th>Статус</th>
+        </tr>
+      </thead>
+      <tbody>
+    <tr v-for="task in filteredTasksByCompetence" :key="task.id">
+      <td>{{ task.title }}</td>
+      <td>{{ getProjectName(task.projectId) }}</td>
+      <td class="description-cell">{{ task.description || '-' }}</td>
+      <td>
+        <div v-if="task.requiredCompetencies && task.requiredCompetencies.length">
+          <span 
+            v-for="compId in task.requiredCompetencies" 
+            :key="compId"
+            class="competence-badge"
+            :class="{
+              'my-competence': hasCompetence(compId),
+              'other-competence': !hasCompetence(compId)
+            }"
+          >
+            {{ getCompetenceName(compId) }}
+            <span v-if="hasCompetence(compId)" class="competence-check">✓</span>
+          </span>
         </div>
-      </div>
+        <span v-else class="no-competencies">Не указаны</span>
+      </td>
+      <td>
+        <span :class="['status-badge', task.status]">
+          {{ getTaskStatusName(task.status) }}
+        </span>
+      </td>
+    </tr>
+  </tbody>
+    </table>
+  </div>
+</div>
 
       <!-- Вкладка проводок -->
      <div v-else class="time-entries-tab full-height-tab">
@@ -210,7 +227,74 @@ const error = ref({
   tasks: null,
   timeEntries: null
 });
+const currentUser = ref(null);
+const userCompetencies = ref([]);
+const allCompetencies = ref([]);
 
+// Загрузка данных пользователя и компетенций
+async function loadUserData() {
+  try {
+    const token = sessionStorage.getItem('authToken');
+    if (token) {
+      currentUser.value = await mockApi.getCurrentUser(token);
+      userCompetencies.value = currentUser.value.competencies || [];
+      console.log('User competencies loaded:', userCompetencies.value);
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки данных пользователя:', err);
+  }
+}
+async function loadCompetencies() {
+  try {
+    allCompetencies.value = await mockApi.getCompetencies();
+  } catch (err) {
+    console.error('Ошибка загрузки компетенций:', err);
+  }
+}
+
+// Добавляем вызовы в onMounted
+onMounted(async () => {
+  console.log('Проверка localStorage:', {
+    token: localStorage.getItem('token'),
+    userId: localStorage.getItem('userId'),
+    role: localStorage.getItem('userRole'),
+    competencies: localStorage.getItem('userCompetencies')
+  });
+  
+  await loadUserData();
+  await loadCompetencies();
+  await loadProjects();
+  await loadTasks();
+  await loadTimeEntries();
+});
+
+// Функция проверки компетенции пользователя
+function hasCompetence(competenceId) {
+  return userCompetencies.value.includes(competenceId);
+}
+
+// Получение названия компетенции
+function getCompetenceName(competenceId) {
+  const competence = allCompetencies.value.find(c => c.id === competenceId);
+  return competence ? competence.name : `Неизвестно (${competenceId})`;
+}
+
+// Фильтрация задач по компетенциям пользователя
+
+const filteredTasksByCompetence = computed(() => {
+  let tasks = [...allTasks.value];
+  
+  // Применяем фильтры по проекту и статусу
+  if (currentProjectFilter.value) {
+    tasks = tasks.filter(task => task.projectId == currentProjectFilter.value);
+  }
+  
+  if (currentStatusFilter.value) {
+    tasks = tasks.filter(task => task.status === currentStatusFilter.value);
+  }
+  
+  return tasks;
+});
 // Фильтры для проектов
 const projectActivityFilter = ref('all');
 const filteredProjects = computed(() => {
@@ -370,17 +454,25 @@ async function loadProjects() {
     loading.value.projects = false;
   }
 }
-
 async function loadTasks() {
   try {
     loading.value.tasks = true;
-    allTasks.value = await mockApi.getTasks();
+    
+    // Если пользователь исполнитель - загружаем только задачи по его компетенциям
+    if (currentUser.value?.role === 'executor' && userCompetencies.value.length > 0) {
+      allTasks.value = await mockApi.getTasksByCompetencies(userCompetencies.value);
+      console.log('Tasks filtered by competencies:', allTasks.value);
+    } else {
+      // Для остальных ролей или если нет компетенций - все задачи
+      allTasks.value = await mockApi.getTasks();
+    }
   } catch (err) {
     error.value.tasks = err.message;
   } finally {
     loading.value.tasks = false;
   }
 }
+
 
 async function loadTimeEntries() {
   try {
@@ -654,7 +746,36 @@ const logout = async () => {
 }
 
 
+.competence-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  margin: 2px;
+  border-radius: 12px;
+  font-size: 12px;
+  background-color: #e0e0e0;
+}
 
+.my-competence {
+  background-color: #e3f2fd;
+  border: 1px solid #bbdefb;
+}
+
+.other-competence {
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  opacity: 0.7;
+}
+
+.competence-check {
+  color: #4caf50;
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+.no-competencies {
+  color: #9e9e9e;
+  font-style: italic;
+}
 .filters {
   display: flex;
   gap: 15px;

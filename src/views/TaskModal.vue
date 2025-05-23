@@ -54,6 +54,21 @@
           </select>
         </div>
         
+        <!-- Блок выбора требуемых компетенций -->
+        <div class="form-group">
+          <label>Требуемые компетенции</label>
+          <div class="competencies-checkboxes">
+            <label v-for="competency in competencies" :key="competency.id">
+              <input
+                type="checkbox"
+                v-model="form.requiredCompetencies"
+                :value="competency.id"
+              >
+              {{ competency.name }}
+            </label>
+          </div>
+        </div>
+        
         <div class="modal-actions">
           <button type="button" class="cancel-btn" @click="closeModal">Отменить</button>
           <button type="submit" class="save-btn" :disabled="isSubmitting">
@@ -69,6 +84,8 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+import mockApi from '@/../api/mockApi.js';
+
 const props = defineProps({
   showModal: Boolean,
   currentTask: {
@@ -89,7 +106,8 @@ const form = reactive({
   title: '',
   projectId: '',
   description: '',
-  status: 'active'
+  status: 'active',
+  requiredCompetencies: [] // Массив ID требуемых компетенций
 });
 
 const errors = reactive({
@@ -98,7 +116,17 @@ const errors = reactive({
 });
 
 const isSubmitting = ref(false);
-const initialized = ref(false);
+const competencies = ref([]);
+
+// Загрузка компетенций при монтировании
+onMounted(async () => {
+  try {
+    competencies.value = await mockApi.getCompetencies();
+  } catch (err) {
+    console.error('Ошибка загрузки компетенций:', err);
+    toast.error('Не удалось загрузить список компетенций');
+  }
+});
 
 // Только активные проекты
 const activeProjects = computed(() => {
@@ -115,7 +143,8 @@ watch(
           title: props.currentTask.title,
           projectId: props.currentTask.projectId,
           description: props.currentTask.description,
-          status: props.currentTask.status
+          status: props.currentTask.status,
+          requiredCompetencies: props.currentTask.requiredCompetencies || []
         });
       } else {
         resetForm();
@@ -132,7 +161,8 @@ function resetForm() {
     title: '',
     projectId: activeProjects.value.length ? activeProjects.value[0].id : '',
     description: '',
-    status: 'active'
+    status: 'active',
+    requiredCompetencies: []
   });
   clearErrors();
 }
@@ -161,15 +191,19 @@ function validateForm() {
   return isValid;
 }
 
-
 async function handleSubmit() {
   if (!validateForm()) return;
   
   isSubmitting.value = true;
   try {
-    await emit('save', { ...form });
+    await emit('save', { 
+      ...form,
+      // Обеспечиваем, что requiredCompetencies всегда массив
+      requiredCompetencies: Array.isArray(form.requiredCompetencies) 
+        ? form.requiredCompetencies 
+        : []
+    });
     
-    // Показываем toast в зависимости от режима
     if (props.isEditing) {
       toast.success('Задача успешно отредактирована');
     } else {
@@ -182,16 +216,9 @@ async function handleSubmit() {
   }
 }
 
-
 function closeModal() {
   emit('close');
 }
-
-onMounted(() => {
-  if (activeProjects.value.length && !form.projectId) {
-    form.projectId = activeProjects.value[0].id;
-  }
-});
 </script>
 
 <style scoped>
@@ -253,6 +280,29 @@ input.invalid, select.invalid {
 
 textarea {
   resize: vertical;
+}
+
+/* Стили для блока компетенций */
+.competencies-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.competencies-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.competencies-checkboxes input[type="checkbox"] {
+  width: auto;
 }
 
 .modal-actions {

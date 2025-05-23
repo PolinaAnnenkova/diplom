@@ -35,22 +35,9 @@ const password = ref('');
 const error = ref('');
 
 // Функция для создания моковых данных
-function initializeMockData() {
-  const mockUsers = [
-    { login: 'admin', password: 'admin123', role: 'admin', name: 'Администратор' },
-    { login: 'manager', password: 'manager123', role: 'manager', name: 'Менеджер' },
-    { login: 'executor', password: 'executor123', role: 'executor', name: 'Исполнитель' },
-  ];
 
-  localStorage.setItem('users', JSON.stringify(mockUsers));
-}
 
-onMounted(() => {
-  // Проверяем, есть ли данные в localStorage, если нет - создаем моковые
-  if (!localStorage.getItem('users')) {
-    initializeMockData();
-  }
-});
+
 async function login() {
   try {
     const response = await mockApi.login({
