@@ -5,38 +5,18 @@
       
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="name">ФИО</label>
+          <label for="name">Имя</label>
           <input 
             type="text" 
             id="name" 
             v-model="form.name" 
             :class="{ 'invalid': errors.name }"
+            required
           >
           <div class="error-message" v-if="errors.name">{{ errors.name }}</div>
         </div>
         
-        <div class="form-group">
-          <label for="age">Возраст</label>
-          <input 
-            type="number" 
-            id="age" 
-            v-model.number="form.age" 
-            :class="{ 'invalid': errors.age }"
-          >
-          <div class="error-message" v-if="errors.age">{{ errors.age }}</div>
-        </div>
-        
-        <div class="form-group">
-          <label for="login">Логин</label>
-          <input 
-            type="text" 
-            id="login" 
-            v-model="form.login" 
-            :class="{ 'invalid': errors.login }"
-          >
-          <div class="error-message" v-if="errors.login">{{ errors.login }}</div>
-        </div>
-        
+        <!-- Пароль только при создании -->
         <div class="form-group">
           <label for="password">Пароль</label>
           <input 
@@ -44,50 +24,68 @@
             id="password" 
             v-model="form.password" 
             :class="{ 'invalid': errors.password }"
-            :placeholder="isEditing ? 'Оставьте пустым, чтобы не изменять' : ''"
+            required
           >
           <div class="error-message" v-if="errors.password">{{ errors.password }}</div>
         </div>
         
         <div class="form-group">
-          <label for="email">Email</label>
-          <input 
-            type="email" 
-            id="email" 
-            v-model="form.email" 
-            :class="{ 'invalid': errors.email }"
-          >
-          <div class="error-message" v-if="errors.email">{{ errors.email }}</div>
+          <label>Тип пользователя:</label>
+          <div class="role-options">
+            <label class="role-option">
+              <input
+                type="radio"
+                v-model="userType"
+                value="admin"
+                :disabled="isEditing"
+              >
+              <span>Администратор</span>
+            </label>
+            <label class="role-option">
+              <input
+                type="radio"
+                v-model="userType"
+                value="manager"
+                :disabled="isEditing"
+              >
+              <span>Менеджер</span>
+            </label>
+            <label class="role-option">
+              <input
+                type="radio"
+                v-model="userType"
+                value="executor"
+                :disabled="isEditing"
+              >
+              <span>Исполнитель</span>
+            </label>
+          </div>
         </div>
-        
-        <div class="form-group">
-          <label for="role">Роль</label>
-          <select id="role" v-model="form.role" @change="handleRoleChange">
-            <option value="admin">Администратор</option>
-            <option value="manager">Менеджер</option>
-            <option value="executor">Исполнитель</option>
-          </select>
-        </div>
-        
-        <!-- Блок выбора компетенций (только для исполнителей) -->
-        <div class="form-group" v-if="showCompetencies">
-          <label>Компетенции исполнителя</label>
-          <div class="competencies-checkboxes">
-            <label v-for="competency in competencies" :key="competency.id">
+
+        <!-- Блок компетенций -->
+        <div class="form-group" v-if="userType === 'executor' && availableRoles.length">
+          <label>Компетенции исполнителя:</label>
+          <div class="competencies-list">
+            <label 
+              v-for="role in availableRoles" 
+              :key="role.id" 
+              class="competency-option"
+            >
               <input
                 type="checkbox"
                 v-model="selectedCompetencies"
-                :value="competency.id"
+                :value="role.id"
               >
-              {{ competency.name }}
+              <span>{{ role.name }}</span>
             </label>
           </div>
+          <div class="error-message" v-if="errors.competencies">{{ errors.competencies }}</div>
         </div>
         
         <div class="modal-actions">
           <button type="button" class="cancel-btn" @click="closeModal">Отменить</button>
           <button type="submit" class="save-btn" :disabled="isSubmitting">
-            {{ isSubmitting ? 'Сохранение...' : isEditing ? 'Сохранить изменения' : 'Добавить пользователя' }}
+            {{ isSubmitting ? 'Сохранение...' : isEditing ? 'Сохранить' : 'Добавить пользователя' }}
           </button>
         </div>
       </form>
@@ -96,173 +94,199 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-import mockApi from '@/../api/mockApi.js';
+import realApi from '@/../api/realApi.js';
 
 const props = defineProps({
   showModal: Boolean,
-  currentItem: Object,
+  currentUser: Object,
   isEditing: Boolean
 });
 
-const emit = defineEmits(['close', 'save']);
+const emit = defineEmits(['close', 'user-saved']);
 
 const form = reactive({
-  id: null,
   name: '',
-  age: null,
-  login: '',
-  password: '',
-  email: '',
-  role: 'user',
-  competencies: []
+  password: ''
 });
 
 const errors = reactive({
   name: '',
-  age: '',
-  login: '',
   password: '',
-  email: ''
+  competencies: ''
 });
 
 const isSubmitting = ref(false);
-const competencies = ref([]);
+const userType = ref(null);
+const availableRoles = ref([]);
 const selectedCompetencies = ref([]);
-const showCompetencies = ref(false);
 
-// Загрузка компетенций при монтировании
-onMounted(async () => {
-  try {
-    competencies.value = await mockApi.getCompetencies();
-  } catch (err) {
-    console.error('Ошибка загрузки компетенций:', err);
-    toast.error('Не удалось загрузить список компетенций');
-  }
-});
-
-// Обработчик изменения роли
-const handleRoleChange = () => {
-  showCompetencies.value = form.role === 'executor';
-  if (form.role !== 'executor') {
-    selectedCompetencies.value = [];
-  }
-};
+// Объявляем resetForm ДО watch
 const resetForm = () => {
-  Object.assign(form, {
-    id: null,
-    name: '',
-    age: null,
-    login: '',
-    password: '',
-    email: '',
-    role: 'user',
-    competencies: []
-  });
+  form.name = '';
+  form.password = '';
+  userType.value = null;
   selectedCompetencies.value = [];
-  showCompetencies.value = false;
   Object.keys(errors).forEach(key => errors[key] = '');
 };
 
-// Следим за текущим пользователем
-watch(
-  [() => props.showModal, () => props.currentItem],
-  ([visible, user]) => {
-    if (visible && user && props.isEditing) {
-      Object.assign(form, {
-        id: user.id,
-        name: user.name,
-        age: user.age,
-        login: user.login,
-        password: '',
-        email: user.email,
-        role: user.role,
-        competencies: user.competencies || []
-      });
-      
-      // Загружаем выбранные компетенции для исполнителя
-      if (user.role === 'executor' && user.competencies) {
-        selectedCompetencies.value = [...user.competencies];
-      }
-      showCompetencies.value = user.role === 'executor';
-    } else if (!visible) {
-      resetForm();
+// Инициализация формы при изменении currentUser
+watch(() => props.currentUser, (user) => {
+  if (user) {
+    form.name = user.name;
+    form.password = user.password; // Пароль не редактируем
+    
+    // Определяем тип пользователя
+    if (user.is_admin) {
+      userType.value = 'admin';
+    } else if (user.is_manager) {
+      userType.value = 'manager';
+    } else {
+      userType.value = 'executor';
     }
-  },
-  { immediate: true }
-);
+    
+    // Загружаем компетенции пользователя
+    if (user.roles) {
+      selectedCompetencies.value = user.roles.map(r => r.id);
+    }
+  } else {
+    resetForm();
+  }
+}, { immediate: true });
 
-// Сброс формы
+// Остальной код остается без изменений
+const loadRoles = async () => {
+  try {
+    availableRoles.value = await realApi.getRoles();
+  } catch (err) {
+    toast.error('Не удалось загрузить список компетенций');
+  }
+};
 
+loadRoles();
 
-// Валидация формы
 const validate = () => {
   let isValid = true;
-  errors.name = !form.name.trim() ? 'ФИО обязательно' : '';
-  errors.age = !form.age ? 'Возраст обязателен' : 
-               (form.age < 14 || form.age > 120) ? 'Возраст 14-120 лет' : '';
-  errors.login = !form.login.trim() ? 'Логин обязателен' : '';
-  errors.password = !props.isEditing && !form.password ? 'Пароль обязателен' :
-                   (form.password && form.password.length < 6) ? 'Минимум 6 символов' : '';
-  errors.email = !form.email.trim() ? 'Email обязателен' :
-                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? 'Некорректный email' : '';
   
-  // Дополнительная валидация для исполнителей
-  if (form.role === 'executor' && selectedCompetencies.value.length === 0) {
-    toast.error('Выберите хотя бы одну компетенцию для исполнителя');
+  errors.name = !form.name.trim() ? 'Имя обязательно' : '';
+  
+  if (!props.isEditing) {
+    errors.password = !form.password ? 'Пароль обязателен' : 
+                     form.password.length < 6 ? 'Минимум 6 символов' : '';
+  }
+  
+  if (!userType.value) {
+    toast.error('Выберите тип пользователя');
     isValid = false;
   }
 
-  // Проверяем все ошибки
-  Object.values(errors).forEach(error => {
-    if (error) {
-      toast.error(error);
-      isValid = false;
-    }
-  });
+  if (userType.value === 'executor' && !selectedCompetencies.value.length) {
+    errors.competencies = 'Выберите хотя бы одну компетенцию';
+    isValid = false;
+  }
 
   return isValid;
 };
+const updateUserCompetencies = async (userId) => {
+  try {
+    // Получаем текущие роли пользователя (если редактирование)
+    const currentRoles = props.isEditing && props.currentUser.roles 
+      ? props.currentUser.roles.map(role => role.id) 
+      : [];
+    
+    // Фильтруем - назначаем только новые роли
+    const rolesToAdd = selectedCompetencies.value.filter(
+      roleId => !currentRoles.includes(roleId)
+    );
+    
+    // Добавляем только новые роли
+    for (const roleId of rolesToAdd) {
+      await realApi.assignRoleToUser(roleId, userId);
+    }
+    
+    console.log('[updateUserCompetencies] Назначены новые компетенции:', rolesToAdd);
+  } catch (err) {
+    console.error('[updateUserCompetencies] Ошибка:', err);
+    throw err;
+  }
+};
 
-// Обработка отправки формы
 const handleSubmit = async () => {
-  if (!validate()) return;
+  console.log('[handleSubmit] Начало. isEditing:', props.isEditing);
+
+  if (!validate()) {
+    console.warn('[handleSubmit] Валидация не пройдена:', errors);
+    return;
+  }
 
   isSubmitting.value = true;
 
   try {
-    const dataToSave = { 
-      ...form,
-      competencies: form.role === 'executor' ? selectedCompetencies.value : []
-    };
+    let userData;
+    let savedUser;
 
-    if (props.isEditing && !dataToSave.password) {
-      delete dataToSave.password;
+    if (props.isEditing) {
+      console.log('[handleSubmit] Режим редактирования');
+      console.log('[handleSubmit] currentUser:', props.currentUser);
+
+      if (!props.currentUser || !props.currentUser.id) {
+        console.error('[handleSubmit] ❌ Нет props.currentUser.id!');
+        throw new Error('Не удалось получить ID пользователя для редактирования');
+      }
+
+      userData = {
+        name: form.name,
+        password:form.password,
+      };
+
+      console.log('[handleSubmit] Отправка на update:', userData, 'ID:', props.currentUser.id);
+
+      await realApi.updateUser(props.currentUser.id, userData);
+
+      if (userType.value === 'executor') {
+        console.log('[handleSubmit] Назначение компетенций исполнителю');
+        await updateUserCompetencies(props.currentUser.id);
+      }
+      
+     
+    } else {
+      console.log('[handleSubmit] Режим добавления нового пользователя');
+
+      userData = {
+        name: form.name,
+        password: form.password,
+        isAdmin: userType.value === 'admin',
+        isManager: userType.value === 'manager'
+      };
+
+      console.log('[handleSubmit] Отправка на регистрацию:', userData);
+      savedUser = await realApi.registerUser(userData);
+
+      if (userType.value === 'executor') {
+        console.log('[handleSubmit] Назначение компетенций исполнителю');
+        await updateUserCompetencies(savedUser.id);
+      }
     }
 
-    emit('save', dataToSave);
+    toast.success(`Пользователь успешно ${props.isEditing ? 'обновлен' : 'добавлен'}`);
+    emit('user-saved', savedUser);
     resetForm();
     closeModal();
-
-    toast.success(props.isEditing 
-      ? 'Пользователь успешно обновлён' 
-      : 'Пользователь добавлен');
   } catch (err) {
-    console.error('Ошибка:', err);
-    toast.error('Произошла ошибка при сохранении');
-  } finally {
-    isSubmitting.value = false;
+    console.error('[handleSubmit] Ошибка:', err);
   }
-};
+}
 
-// Закрытие модалки
+
 const closeModal = () => {
   resetForm();
   emit('close');
 };
 </script>
+
+
 
 <style scoped>
 .modal-overlay {
@@ -294,7 +318,7 @@ h2 {
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 label {
@@ -321,27 +345,32 @@ input.invalid, select.invalid {
   margin-top: 0.25rem;
 }
 
-.competencies-checkboxes {
+.role-options {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid #eee;
-  border-radius: 4px;
+  gap: 1rem;
+  margin-top: 0.5rem;
 }
 
-.competencies-checkboxes label {
+.role-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  cursor: pointer;
+  gap: 0.5rem;
 }
 
-.competencies-checkboxes input[type="checkbox"] {
-  width: auto;
+.competencies-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.competency-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #f5f5f5;
+  border-radius: 4px;
 }
 
 .modal-actions {

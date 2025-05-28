@@ -27,7 +27,8 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import mockApi from '..//..//api/mockApi.js';
+//import mockApi from '..//..//api/mockApi.js';
+import realApi from '..//..//api/realApi.js';
 const router = useRouter();
 
 const username = ref('');
@@ -39,25 +40,52 @@ const error = ref('');
 
 
 async function login() {
-  try {
-    const response = await mockApi.login({
+    try {
+    // 1. Получаем токен
+    const authResponse = await realApi.login({
       login: username.value,
       password: password.value
     });
+
+    // 2. Сохраняем токен
+    localStorage.setItem('authToken', authResponse.access_token);
     
-    // Сохраняем токен и данные пользователя
-    sessionStorage.setItem('authToken', response.token);
-    sessionStorage.setItem('currentUser', JSON.stringify(response));
+    // 3. Получаем полные данные пользователя
+    const currentUser = await realApi.getCurrentUser(authResponse.access_token);
+    console.log('Current user data:', currentUser);
     
-    // Перенаправляем по роли
-    switch (response.role) {
-      case 'admin': router.push('/admin'); break;
-      case 'manager': router.push('/manager'); break;
-      case 'executor': router.push('/executor'); break;
-      default: router.push('/');
+    // 4. Проверяем роль из токена (как fallback)
+    const tokenPayload = JSON.parse(atob(authResponse.access_token.split('.')[1]));
+    const tokenRole = tokenPayload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+    console.log('Role from token:', tokenRole);
+    
+    // 5. Определяем приоритетную роль
+    const effectiveRole = currentUser.role || tokenRole || 'executor';
+    
+    // 6. Сохраняем пользователя
+    sessionStorage.setItem('currentUser', JSON.stringify({
+      ...currentUser,
+      role: effectiveRole
+    }));
+    
+    // 7. Перенаправляем
+    switch (effectiveRole.toLowerCase()) {
+      case 'admin':
+        console.log('Redirecting to /admin');
+        router.push('/admin');
+        break;
+      case 'manager':
+        console.log('Redirecting to /manager');
+        router.push('/manager');
+        break;
+      default:
+        console.log('Redirecting to /executor');
+        router.push('/executor');
     }
+    
   } catch (err) {
-    error.value = err.message;
+    console.error('Login error:', err);
+    error.value = err.message || 'Ошибка авторизации';
   }
 }
 

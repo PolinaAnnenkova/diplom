@@ -1,9 +1,16 @@
 <template>
   <div class="competence-view">
     <div class="admin-actions">
-      <button class="add-btn" @click="showAddModal">
-        Добавить компетенцию
-      </button>
+      <div class="add-role-form">
+        <input 
+          v-model="newRoleName" 
+          placeholder="Введите название новой роли"
+          @keyup.enter="addRole"
+        >
+        <button class="add-btn" @click="addRole">
+          Добавить роль
+        </button>
+      </div>
     </div>
     
     <div v-if="isLoading" class="loading">Загрузка...</div>
@@ -19,94 +26,70 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(competence, index) in competencies" :key="competence.id">
+          <tr v-for="(role, index) in roles" :key="role.id">
             <td>{{ index + 1 }}</td>
-            <td>{{ competence.name }}</td>
+            <td>{{ role.name }}</td>
             <td class="actions">
-              <button class="edit-btn" @click="showEditModal(competence)">✏️</button>
-              <button class="delete-btn" @click="deleteItem(competence.id)">🗑️</button>
+              <button class="delete-btn" @click="deleteRole(role.id)">🗑️</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-
-    <CompetenceModal 
-      :showModal="showModal"
-      :currentItem="currentItem"
-      :isEditing="isEditing"
-      @close="closeModal"
-      @save="handleSave"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import mockApi from '@/../api/mockApi.js';
-import CompetenceModal from '@/views/CompetenceModal.vue';
+import realApi from '@/../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
-const competencies = ref([]);
+const roles = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
-const showModal = ref(false);
-const isEditing = ref(false);
-const currentItem = ref(null);
+const newRoleName = ref('');
 
 const loadData = async () => {
   try {
     isLoading.value = true;
-    competencies.value = await mockApi.getCompetencies();
+    roles.value = await realApi.getRoles();
   } catch (err) {
     error.value = err.message;
+    toast.error('Ошибка загрузки ролей');
   } finally {
     isLoading.value = false;
   }
 };
 
-const showAddModal = () => {
-  currentItem.value = null;
-  isEditing.value = false;
-  showModal.value = true;
-};
+const addRole = async () => {
+  const trimmedName = newRoleName.value.trim();
+  if (!trimmedName) {
+    toast.warning('Введите название роли');
+    return;
+  }
 
-const showEditModal = (competence) => {
-  currentItem.value = { ...competence };
-  isEditing.value = true;
-  showModal.value = true;
-};
-
-const closeModal = () => {
-  showModal.value = false;
-  currentItem.value = null;
-};
-
-const handleSave = async (CompetenceData) => {
   try {
-    if (isEditing.value) {
-      await mockApi.updateCompetence(CompetenceData.id, CompetenceData);
-    } else {
-      await mockApi.createCompetence(CompetenceData);
-    }
-    await loadData();
-    closeModal();
+    const createdRole = await realApi.createRole(trimmedName);
+    roles.value.push(createdRole);
+    newRoleName.value = '';
+    toast.success(`Роль "${createdRole.name}" создана`);
   } catch (err) {
-    error.value = err.message;
+    toast.error(err.message || 'Ошибка сервера при создании роли');
+    console.error('Ошибка при создании роли:', err);
   }
 };
 
-const deleteItem = async (id) => {
-  if (confirm('Вы уверены, что хотите удалить роль?')) {
-    try {
-      await mockApi.deleteCompetence(id);
-      await loadData();
-      toast.success('Роль успешно удалена');
-    } catch (err) {
-      error.value = err.message;
-      toast.error('Ошибка при удалении роли');
-    }
+const deleteRole = async (id) => {
+  if (!confirm('Вы уверены, что хотите удалить эту роль?')) return;
+
+  try {
+    await realApi.deleteRole(id);
+    roles.value = roles.value.filter(role => role.id !== id);
+    toast.success('Роль успешно удалена');
+  } catch (err) {
+    toast.error(err.message || 'Ошибка при удалении роли');
+    console.error('Ошибка при удалении:', err);
   }
 };
 
@@ -118,12 +101,25 @@ onMounted(() => {
 <style scoped>
 .competence-view {
   width: 100%;
+  padding: 20px;
 }
 
 .admin-actions {
-  display: flex;
-  justify-content: flex-end;
   margin-bottom: 1.5rem;
+}
+
+.add-role-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.add-role-form input {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  min-width: 300px;
+  flex-grow: 1;
 }
 
 .add-btn {
@@ -131,7 +127,7 @@ onMounted(() => {
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
   transition: background 0.3s ease;
@@ -157,6 +153,9 @@ onMounted(() => {
 
 .table-container {
   overflow-x: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .data-table {
@@ -175,6 +174,8 @@ onMounted(() => {
   background-color: #f8f9fa;
   font-weight: bold;
   color: #004080;
+  position: sticky;
+  top: 0;
 }
 
 .data-table tr:hover {
@@ -184,32 +185,30 @@ onMounted(() => {
 .actions {
   display: flex;
   gap: 0.5rem;
+  justify-content: flex-end;
 }
 
-.edit-btn, .delete-btn {
+.delete-btn {
   padding: 0.5rem;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 1rem;
+  background-color: #dc3545;
+  color: white;
   transition: opacity 0.3s ease;
 }
 
-.edit-btn {
-  background-color: #ffc107;
-  color: #212529;
-}
-
-.delete-btn {
-  background-color: #dc3545;
-  color: white;
-}
-
-.edit-btn:hover, .delete-btn:hover {
+.delete-btn:hover {
   opacity: 0.8;
 }
 
 @media (max-width: 768px) {
+  .add-role-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
   .data-table th,
   .data-table td {
     padding: 0.75rem 0.5rem;

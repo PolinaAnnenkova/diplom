@@ -53,7 +53,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import ProjectModal from '@/views/ProjectModal.vue';
-import mockApi from '../../api/mockApi.js';
+import realApi from '../../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -79,13 +79,30 @@ onMounted(async () => {
 async function loadProjects() {
   try {
     isLoading.value = true;
-    projects.value = await mockApi.getProjects();
+    error.value = null;
+    
+    // Получаем проекты из API
+    const apiProjects = await realApi.getProjects();
+    
+    // Преобразуем данные API в формат компонента
+    projects.value = apiProjects.map(project => ({
+      id: project.id || project.code, // используем id если есть, иначе code
+      code: project.code,
+      name: project.name,
+      status: project.status === 'active' ? 'active' : 'inactive', // используем напрямую status из API
+      isActive: project.status === 'active' // дополнительное поле для фильтрации
+    }));
+    
+    console.log('Transformed projects:', projects.value); // для отладки
+    
   } catch (err) {
-    error.value = err.message;
+    error.value = err.message || 'Ошибка загрузки проектов';
+    toast.error('Ошибка загрузки проектов');
   } finally {
     isLoading.value = false;
   }
 }
+   
 
 function applyFilters() {
   // Фильтрация происходит через computed свойство filteredProjects
@@ -107,26 +124,32 @@ function closeModal() {
   showModal.value = false;
   currentProject.value = null;
 }
+// В компоненте ProjectsView.vue
 
 async function handleSave(projectData) {
   try {
     if (isEditing.value) {
-      await mockApi.updateProject(projectData.id, projectData);
+      const result = await realApi.updateProject(projectData.code, {
+        name: projectData.name,
+        isActive: projectData.isActive
+      });
+      console.log('Project updated:', result);
     } else {
-      await mockApi.createProject(projectData);
+      await realApi.createProject(projectData);
     }
+
     await loadProjects();
+    toast.success('Проект сохранён');
     closeModal();
-    emit('project-created');
-  } catch (err) {
-    error.value = err.message;
+  } catch (error) {
+    toast.error(error.message);
   }
 }
 
-async function deleteProject(id) {
+async function deleteProject(code) {
   if (confirm('Вы уверены, что хотите удалить этот проект?')) {
     try {
-      await mockApi.deleteProject(id);
+      await realApi.deleteProject(code);
       await loadProjects();
       toast.success('Проект успешно удалён');
     } catch (err) {

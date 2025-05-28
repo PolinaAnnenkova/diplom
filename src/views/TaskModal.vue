@@ -5,74 +5,84 @@
       
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="title">Название задачи*</label>
+          <label for="name">Название задачи*</label>
           <input 
             type="text" 
-            id="title" 
-            v-model="form.title"
-            :class="{ 'invalid': errors.title }"
+            id="name" 
+            v-model="form.name" 
             required
+            :class="{ 'invalid': errors.name }"
           >
-          <span v-if="errors.title" class="error-message">{{ errors.title }}</span>
+          <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
         </div>
         
-        <div class="form-group">
-          <label for="project">Проект*</label>
-          <select 
-            id="project" 
-            v-model="form.projectId"
-            :class="{ 'invalid': errors.projectId }"
+        <div v-if="!isEditing" class="form-group">
+          <label for="projectCode">Проект*</label>
+          <select
+            id="projectCode"
+            v-model="form.projectCode"
             required
+            :class="{ 'invalid': errors.projectCode }"
           >
             <option value="" disabled>Выберите проект</option>
             <option 
-              v-for="project in activeProjects" 
-              :key="project.id" 
-              :value="project.id"
+              v-for="project in projects" 
+              :key="project.code" 
+              :value="project.code"
             >
               {{ project.name }} ({{ project.code }})
             </option>
           </select>
-          <span v-if="errors.projectId" class="error-message">{{ errors.projectId }}</span>
+          <span v-if="errors.projectCode" class="error-message">{{ errors.projectCode }}</span>
         </div>
         
-        <div class="form-group">
-          <label for="description">Описание</label>
-          <textarea 
-            id="description" 
-            v-model="form.description" 
-            rows="4"
-            placeholder="Дополнительные детали задачи..."
-          ></textarea>
-        </div>
-        
-        <div class="form-group">
-          <label for="status">Статус</label>
-          <select id="status" v-model="form.status">
-            <option value="active">Активна</option>
-            <option value="inactive">Не активна</option>
+        <div v-if="!isEditing" class="form-group">
+          <label for="roleId">Роль*</label>
+          <select
+            id="roleId"
+            v-model="form.roleId"
+            required
+            :class="{ 'invalid': errors.roleId }"
+          >
+            <option value="" disabled>Выберите роль</option>
+            <option 
+              v-for="role in roles" 
+              :key="role.id" 
+              :value="role.id"
+            >
+              {{ role.name }}
+            </option>
           </select>
+          <span v-if="errors.roleId" class="error-message">{{ errors.roleId }}</span>
         </div>
         
-        <!-- Блок выбора требуемых компетенций -->
         <div class="form-group">
-          <label>Требуемые компетенции</label>
-          <div class="competencies-checkboxes">
-            <label v-for="competency in competencies" :key="competency.id">
-              <input
-                type="checkbox"
-                v-model="form.requiredCompetencies"
-                :value="competency.id"
-              >
-              {{ competency.name }}
-            </label>
+          <label>Статус</label>
+          <div class="status-toggle">
+            <button 
+              type="button" 
+              class="toggle-btn" 
+              :class="{ 'active': form.isActive }"
+              @click="form.isActive = true"
+            >
+              Активный
+            </button>
+            <button 
+              type="button" 
+              class="toggle-btn" 
+              :class="{ 'active': !form.isActive }"
+              @click="form.isActive = false"
+            >
+              Неактивный
+            </button>
           </div>
         </div>
         
         <div class="modal-actions">
           <button type="button" class="cancel-btn" @click="closeModal">Отменить</button>
           <button type="submit" class="save-btn" :disabled="isSubmitting">
-            {{ isEditing ? 'Сохранить изменения' : 'Создать задачу' }}
+            <span v-if="isSubmitting">Сохранение...</span>
+            <span v-else>{{ isEditing ? 'Сохранить' : 'Создать' }}</span>
           </button>
         </div>
       </form>
@@ -81,142 +91,139 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, reactive, watch } from 'vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
-import mockApi from '@/../api/mockApi.js';
+import realApi from '../../api/realApi.js';
 
 const props = defineProps({
   showModal: Boolean,
-  currentTask: {
-    type: Object,
-    default: null
-  },
+  currentTask: Object,
   isEditing: Boolean,
   projects: {
+    type: Array,
+    default: () => []
+  },
+  roles: {
     type: Array,
     default: () => []
   }
 });
 
-const emit = defineEmits(['close', 'save']);
+const emit = defineEmits(['close', 'task-created']);
 
 const form = reactive({
   id: null,
-  title: '',
-  projectId: '',
-  description: '',
-  status: 'active',
-  requiredCompetencies: [] // Массив ID требуемых компетенций
+  name: '',
+  projectCode: '',
+  roleId: '',
+  isActive: true
 });
 
 const errors = reactive({
-  title: '',
-  projectId: ''
+  name: '',
+  projectCode: '',
+  roleId: ''
 });
 
 const isSubmitting = ref(false);
-const competencies = ref([]);
 
-// Загрузка компетенций при монтировании
-onMounted(async () => {
-  try {
-    competencies.value = await mockApi.getCompetencies();
-  } catch (err) {
-    console.error('Ошибка загрузки компетенций:', err);
-    toast.error('Не удалось загрузить список компетенций');
+watch(() => props.currentTask, (newVal) => {
+  if (newVal) {
+    Object.assign(form, {
+      id: newVal.id,
+      name: newVal.name,
+      projectCode: newVal.projectCode,
+      roleId: newVal.roleId,
+      isActive: newVal.isActive
+    });
+  } else {
+    resetForm();
   }
-});
-
-// Только активные проекты
-const activeProjects = computed(() => {
-  return props.projects.filter(project => project.status === 'active');
-});
-
-watch(
-  () => props.showModal,
-  (visible) => {
-    if (visible) {
-      if (props.currentTask) {
-        Object.assign(form, {
-          id: props.currentTask.id,
-          title: props.currentTask.title,
-          projectId: props.currentTask.projectId,
-          description: props.currentTask.description,
-          status: props.currentTask.status,
-          requiredCompetencies: props.currentTask.requiredCompetencies || []
-        });
-      } else {
-        resetForm();
-      }
-    } else {
-      resetForm();
-    }
-  }
-);
+}, { immediate: true });
 
 function resetForm() {
   Object.assign(form, {
     id: null,
-    title: '',
-    projectId: activeProjects.value.length ? activeProjects.value[0].id : '',
-    description: '',
-    status: 'active',
-    requiredCompetencies: []
+    name: '',
+    projectCode: '',
+    roleId: '',
+    isActive: true
   });
   clearErrors();
 }
 
 function clearErrors() {
-  errors.title = '';
-  errors.projectId = '';
+  errors.name = '';
+  errors.projectCode = '';
+  errors.roleId = '';
 }
 
-function validateForm() {
+function validate() {
   let isValid = true;
   clearErrors();
 
-  if (!form.title.trim()) {
-    errors.title = 'Введите название задачи';
-    toast.error('Название задачи обязательно');
+  if (!form.name.trim()) {
+    errors.name = 'Введите название задачи';
     isValid = false;
   }
 
-  if (!form.projectId) {
-    errors.projectId = 'Выберите проект';
-    toast.error('Проект обязателен для выбора');
-    isValid = false;
+  if (!props.isEditing) {
+    if (!form.projectCode) {
+      errors.projectCode = 'Выберите проект';
+      isValid = false;
+    }
+
+    if (!form.roleId) {
+      errors.roleId = 'Выберите роль';
+      isValid = false;
+    }
   }
 
   return isValid;
 }
 
 async function handleSubmit() {
-  if (!validateForm()) return;
-  
-  isSubmitting.value = true;
-  try {
-    await emit('save', { 
-      ...form,
-      // Обеспечиваем, что requiredCompetencies всегда массив
-      requiredCompetencies: Array.isArray(form.requiredCompetencies) 
-        ? form.requiredCompetencies 
-        : []
-    });
-    
-    if (props.isEditing) {
-      toast.success('Задача успешно отредактирована');
-    } else {
-      toast.success('Задача успешно создана');
-    }
+  if (!validate()) return;
 
+  isSubmitting.value = true;
+
+  try {
+    if (props.isEditing && form.id) {
+      await realApi.updateTask({
+        id: form.id,
+        name: form.name,
+        isActive: form.isActive
+      });
+      toast.success('Задача успешно обновлена');
+      
+      emit('task-created', {
+        ...props.currentTask,
+        name: form.name,
+        isActive: form.isActive
+      });
+    } else {
+      const createdTask = await realApi.createTask({
+        name: form.name,
+        projectCode: form.projectCode,
+        roleId: form.roleId,
+        isActive: form.isActive
+      });
+      toast.success('Задача успешно создана');
+      emit('task-created', createdTask);
+    }
+    
     closeModal();
+  } catch (error) {
+    toast.error(error.message || 'Ошибка при сохранении задачи');
+    console.error('Save error:', error);
   } finally {
     isSubmitting.value = false;
   }
 }
 
 function closeModal() {
+  resetForm();
   emit('close');
 }
 </script>
@@ -260,7 +267,7 @@ label {
   font-weight: 500;
 }
 
-input, select, textarea {
+input, select {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #ddd;
@@ -278,31 +285,33 @@ input.invalid, select.invalid {
   margin-top: 0.25rem;
 }
 
-textarea {
-  resize: vertical;
-}
-
-/* Стили для блока компетенций */
-.competencies-checkboxes {
+.status-toggle {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid #eee;
   border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #ddd;
 }
 
-.competencies-checkboxes label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.toggle-btn {
+  flex: 1;
+  padding: 0.75rem;
+  background: #f5f5f5;
+  border: none;
   cursor: pointer;
+  transition: all 0.3s;
 }
 
-.competencies-checkboxes input[type="checkbox"] {
-  width: auto;
+.toggle-btn.active {
+  background: #007bff;
+  color: white;
+}
+
+.toggle-btn:first-child {
+  border-right: 1px solid #ddd;
+}
+
+.toggle-btn.active:first-child {
+  border-right-color: #0056b3;
 }
 
 .modal-actions {
@@ -318,12 +327,7 @@ button {
   border-radius: 4px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
-}
-
-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+  transition: background-color 0.3s;
 }
 
 .cancel-btn {
@@ -339,7 +343,12 @@ button:disabled {
   color: white;
 }
 
-.save-btn:hover:not(:disabled) {
+.save-btn:hover {
   background-color: #0056b3;
+}
+
+.save-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 </style>

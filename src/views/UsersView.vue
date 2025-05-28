@@ -5,7 +5,7 @@
         <input 
           type="text" 
           v-model="searchQuery"
-          placeholder="Поиск по имени или email..."
+          placeholder="Поиск по имени..."
           class="search-input"
           @input="applySearch"
         >
@@ -17,7 +17,7 @@
         </select>
       </div>
       
-      <button class="add-btn" @click="showAddModal">
+      <button class="add-btn" @click="showAddModal = true">
         Добавить пользователя
       </button>
     </div>
@@ -30,11 +30,9 @@
         <thead>
           <tr>
             <th>№</th>
-            <th>ФИО</th>
-            <th>Возраст</th>
-            <th>Email</th>
+            <th>Имя</th>
             <th>Роль</th>
-            <th v-if="hasCompetencies">Компетенции</th>
+            <th>Компетенции</th>
             <th>Действия</th>
           </tr>
         </thead>
@@ -42,18 +40,21 @@
           <tr v-for="(user, index) in filteredUsers" :key="user.id">
             <td>{{ index + 1 }}</td>
             <td>{{ user.name }}</td>
-            <td>{{ user.age }}</td>
-            <td>{{ user.email }}</td>
-            <td>{{ roleNames[user.role] }}</td>
-            <td v-if="hasCompetencies">
-              <span v-if="user.role === 'executor' && user.competencies?.length">
-                {{ getCompetenciesNames(user.competencies) }}
-              </span>
-              <span v-else>-</span>
-            </td>
+            <td>{{ getUserRole(user) }}</td>
+            <td>
+      <span v-if="user.roles.length">{{ user.roles.map(r => r.name).join(', ') }}</span>
+      <span v-else>—</span>
+    </td>
             <td class="actions">
-              <button class="edit-btn" @click="showEditModal(user)">✏️</button>
-              <button class="delete-btn" @click="deleteItem(user.id)">🗑️</button>
+              <button class="edit-btn" @click="openEditModal(user)">✏️</button>
+              <button 
+      class="delete-btn" 
+      @click="confirmDelete(user)"
+       
+      
+    >
+      🗑️
+    </button>
             </td>
           </tr>
         </tbody>
@@ -61,54 +62,57 @@
     </div>
 
     <UserModal 
-      :showModal="showModal"
-      :currentItem="currentItem"
+      v-if="showAddModal"
+      :showModal="showAddModal"
+      
+      @close="showAddModal = false"
+      @user-added="handleUserAdded"
+    />
+    <UserModal 
+      v-if="showUserModal"
+      :showModal="showUserModal"
+      :currentUser="currentUser"
       :isEditing="isEditing"
-      :availableCompetencies="competencies"
       @close="closeModal"
-      @save="handleSave"
+      @user-saved="handleUserSaved"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import mockApi from '@/../api/mockApi.js';
-import UserModal from '@/views/UserModal.vue';
+import { ref, onMounted } from 'vue';
+import realApi from '@/../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+import UserModal from '@/views/UserModal.vue';
 
 const users = ref([]);
-const competencies = ref([]);
 const filteredUsers = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
-const showModal = ref(false);
-const isEditing = ref(false);
-const currentItem = ref(null);
 const searchQuery = ref('');
 const roleFilter = ref('all');
+const showAddModal = ref(false);
+const showUserModal = ref(false);
+const currentUser = ref(null);
+const isEditing = ref(false);
 
-const roleNames = {
-  admin: 'Администратор',
-  manager: 'Менеджер',
-  executor: 'Исполнитель'
-};
-
-const hasCompetencies = computed(() => {
-  return users.value.some(user => user.role === 'executor' && user.competencies?.length);
-});
 
 const loadData = async () => {
   try {
     isLoading.value = true;
-    const [usersData, competenciesData] = await Promise.all([
-      mockApi.getUsers(),
-      mockApi.getCompetencies()
-    ]);
-    users.value = usersData;
-    competencies.value = competenciesData;
-    filteredUsers.value = [...users.value];
+    const usersData = await realApi.getUsers();
+
+    // Загружаем компетенции для каждого пользователя
+    const usersWithRoles = await Promise.all(
+      usersData.map(async (user) => {
+        const fullUser = await realApi.getUserById(user.id);
+        return { ...user, roles: fullUser.roles || [] };
+      })
+    );
+
+    users.value = usersWithRoles;
+    applySearch();
   } catch (err) {
     error.value = err.message;
     toast.error('Ошибка загрузки данных');
@@ -117,76 +121,75 @@ const loadData = async () => {
   }
 };
 
-const getCompetenciesNames = (competencyIds) => {
-  return competencyIds.map(id => {
-    const competency = competencies.value.find(c => c.id === id);
-    return competency ? competency.name : `Неизвестная (${id})`;
-  }).join(', ');
+const confirmDelete = async (user) => {
+  if (!confirm(`Вы уверены, что хотите удалить пользователя "${user.name}"?`)) {
+    return;
+  }
+
+  try {
+    await realApi.deleteUser(user.id);
+    toast.success('Пользователь успешно удален');
+    loadData(); // Перезагружаем список пользователей
+  } catch (err) {
+    console.error('Ошибка удаления пользователя:', err);
+    toast.error(err.message || 'Не удалось удалить пользователя');
+  }
+};
+const getUserRole = (user) => {
+  if (user.is_admin) return 'Администратор';
+  if (user.is_manager) return 'Менеджер';
+  return 'Исполнитель';
 };
 
 const applySearch = () => {
   const query = searchQuery.value.toLowerCase();
-  
   filteredUsers.value = users.value.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(query) || 
-      user.email.toLowerCase().includes(query);
-    
-    const matchesRole = 
-      roleFilter.value === 'all' || 
-      user.role === roleFilter.value;
-    
+    const role = getUserRole(user);
+    const roleKey = role === 'Администратор'
+      ? 'admin'
+      : role === 'Менеджер'
+        ? 'manager'
+        : 'executor';
+
+    const matchesSearch = user.name.toLowerCase().includes(query);
+    const matchesRole = roleFilter.value === 'all' || roleKey === roleFilter.value;
+
     return matchesSearch && matchesRole;
   });
 };
-
-const showAddModal = () => {
-  currentItem.value = null;
-  isEditing.value = false;
-  showModal.value = true;
-};
-
-const showEditModal = (user) => {
-  currentItem.value = { 
-    ...user,
-    competencies: user.role === 'executor' ? [...(user.competencies || [])] : []
-  };
+// Открытие модалки для редактирования
+const openEditModal = (user) => {
+  currentUser.value = { ...user };
   isEditing.value = true;
-  showModal.value = true;
+  showUserModal.value = true;
 };
 
+// Закрытие модалки
 const closeModal = () => {
-  showModal.value = false;
-  currentItem.value = null;
+  showUserModal.value = false;
+  currentUser.value = null;
+  isEditing.value = false;
 };
 
-const handleSave = async (userData) => {
-  try {
-    isEditing.value 
-      ? await mockApi.updateUser(userData.id, userData)
-      : await mockApi.createUser(userData);
+const handleUserSaved = (savedUser) => {
+  console.log('[handleUserSaved] Получен savedUser:', savedUser);
+  console.log('[handleUserSaved] isEditing:', isEditing.value);
+
+
+  if (isEditing.value) {
+    loadData();
+
     
-    await loadData();
-    closeModal();
-    toast.success(`Пользователь успешно ${isEditing.value ? 'обновлён' : 'добавлен'}`);
-  } catch (err) {
-    error.value = err.message;
-    toast.error(`Ошибка ${isEditing.value ? 'обновления' : 'создания'} пользователя`);
+  } else {
+    console.log('[handleUserSaved] Режим добавления. Добавляем пользователя:', savedUser);
+    users.value.unshift(savedUser);
+    toast.success('Пользователь добавлен');
   }
+
+  applySearch();
+  closeModal();
 };
 
-const deleteItem = async (id) => {
-  if (confirm('Вы уверены, что хотите удалить пользователя?')) {
-    try {
-      await mockApi.deleteUser(id);
-      await loadData();
-      toast.success('Пользователь успешно удалён');
-    } catch (err) {
-      error.value = err.message;
-      toast.error('Ошибка при удалении пользователя');
-    }
-  }
-};
 
 onMounted(() => {
   loadData();
@@ -239,7 +242,6 @@ onMounted(() => {
   border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
-  transition: background 0.3s ease;
 }
 
 .add-btn:hover {
@@ -300,14 +302,12 @@ onMounted(() => {
   padding: 0.5rem;
   border: none;
   border-radius: 4px;
-  cursor: pointer;
   font-size: 1rem;
-  transition: all 0.3s ease;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
 }
 
 .edit-btn {
@@ -318,11 +318,6 @@ onMounted(() => {
 .delete-btn {
   background-color: #dc3545;
   color: white;
-}
-
-.edit-btn:hover, .delete-btn:hover {
-  opacity: 0.8;
-  transform: scale(1.05);
 }
 
 @media (max-width: 768px) {
