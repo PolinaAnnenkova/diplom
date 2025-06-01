@@ -1,214 +1,187 @@
 <template>
-  <div class="modal-overlay" v-if="show" @click.self="close">
+  <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
-      <h2>{{ currentEntry ? 'Редактирование проводки' : 'Новая проводка' }}</h2>
-      
-      <form @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label for="date">Дата*</label>
-          <input
-            type="date"
-            id="date"
-            v-model="form.date"
-            :class="{ 'invalid': errors.date }"
-            :max="maxDate"
-            required
-          >
-          <span v-if="errors.date" class="error-message">{{ errors.date }}</span>
-        </div>
+      <div class="modal-header">
+        <h3>{{ editing ? 'Редактировать проводку' : 'Новая проводка' }}</h3>
+        <button class="close-btn" @click="close">&times;</button>
+      </div>
 
-        <div class="form-group">
-          <label for="taskId">Задача*</label>
-          <select 
-            id="taskId" 
-            v-model="form.taskId"
-            :class="{ 'invalid': errors.taskId }"
-            required
-          >
-            <option value="" disabled>Выберите задачу</option>
-            <option 
-              v-for="task in activeTasks" 
-              :key="task.id" 
-              :value="task.id"
+      <div class="modal-body">
+        <form @submit.prevent="submit">
+          <div class="form-group">
+            <label for="entry-date">Дата:</label>
+            <input
+              id="entry-date"
+              type="date"
+              v-model="formData.date"
+              required
+              class="form-control"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="entry-time">Время (часы):</label>
+            <input
+              id="entry-time"
+              type="number"
+              v-model.number="formData.time"
+              min="0.25"
+              max="24"
+              step="0.25"
+              required
+              class="form-control"
+              placeholder="1.5"
+            />
+            <small class="hint">Укажите время в часах (0.25 = 15 минут)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="entry-task">Задача:</label>
+            <select
+              id="entry-task"
+              v-model="formData.taskId"
+              required
+              class="form-control"
             >
-              {{ task.title }}
-            </option>
-          </select>
-          <span v-if="errors.taskId" class="error-message">{{ errors.taskId }}</span>
-        </div>
+              <option value="" disabled>Выберите задачу</option>
+              <option
+                v-for="task in availableTasks"
+                :key="task.id"
+                :value="task.id"
+              >
+                {{ task.title }} ({{ getProjectName(task.projectId) }})
+              </option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label for="hours">Количество часов*</label>
-          <input
-            type="number"
-            id="hours"
-            v-model.number="form.hours"
-            min="0.5"
-            max="24"
-            step="0.5"
-            :class="{ 'invalid': errors.hours }"
-            required
-          >
-          <span v-if="errors.hours" class="error-message">{{ errors.hours }}</span>
-        </div>
+          <div class="form-group">
+            <label for="entry-description">Описание:</label>
+            <textarea
+              id="entry-description"
+              v-model="formData.description"
+              class="form-control"
+              rows="3"
+              placeholder="Опишите выполненную работу"
+            ></textarea>
+          </div>
 
-        <div class="form-group">
-          <label for="description">Описание</label>
-          <textarea
-            id="description"
-            v-model="form.description"
-            rows="3"
-            placeholder="Опишите выполненную работу..."
-          ></textarea>
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="cancel-btn" @click="close">Отменить</button>
-          <button type="submit" class="save-btn" :disabled="isSubmitting">
-            {{ currentEntry ? 'Сохранить изменения' : 'Создать проводку' }}
-          </button>
-        </div>
-      </form>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" @click="close">
+              Отмена
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="loading">
+              {{ loading ? 'Сохранение...' : editing ? 'Обновить' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { toast } from 'vue3-toastify';
-import 'vue3-toastify/dist/index.css';
+import realApi from '../../api/realApi.js';
+
 const props = defineProps({
   show: Boolean,
-  tasks: {
-    type: Array,
-    default: () => []
-  },
-  currentEntry: {
-    type: Object,
-    default: null
+  tasks: Array,
+  projects: Array,
+  currentEntry: Object,
+});
+
+const emit = defineEmits(['close', 'saved']);
+
+const formData = ref({
+  date: new Date().toISOString().split('T')[0],
+  time: 1,
+  description: '',
+  taskId: '',
+});
+
+const loading = ref(false);
+const editing = ref(false);
+
+const availableTasks = computed(() => props.tasks || []);
+
+const getProjectName = (projectId) => {
+  const project = props.projects?.find(p => p.id === projectId);
+  return project ? project.name : 'Неизвестный проект';
+};
+
+const resetForm = () => {
+  formData.value = {
+    date: new Date().toISOString().split('T')[0],
+    time: 1,
+    description: '',
+    taskId: '',
+  };
+  editing.value = false;
+};
+
+const close = () => {
+  resetForm();
+  emit('close');
+};
+
+const submit = async () => {
+  try {
+    loading.value = true;
+
+    const entryData = {
+      date: formatDateForBackend(formData.value.date),
+      time: formatTimeForBackend(formData.value.time),
+      taskId: formData.value.taskId,
+      desc: formData.value.description
+    };
+
+    if (editing.value && props.currentEntry?.id) {
+      // Редактирование существующей проводки
+      await realApi.updateEntry(props.currentEntry.id, entryData);
+      toast.success('Проводка успешно обновлена');
+    } else {
+      // Создание новой проводки
+      await realApi.addEntry(entryData);
+      toast.success('Проводка успешно создана');
+    }
+
+    emit('saved');
+    close();
+  } catch (error) {
+    console.error('Ошибка сохранения проводки:', error);
+    toast.error(error.message || 'Ошибка при сохранении проводки');
+  } finally {
+    loading.value = false;
   }
-});
+};
+// Форматирование даты для бэкенда (YYYY/MM/DD)
+const formatDateForBackend = (dateString) => {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+};
 
-const emit = defineEmits(['save', 'close']);
+// Форматирование времени для бэкенда (заменяем . на :)
+const formatTimeForBackend = (time) => {
+  // Преобразуем число в строку и заменяем точку на двоеточие
+  return time.toString().replace('.', ':');
+};
 
-const form = reactive({
-  id: null,
-  date: '',
-  taskId: '',
-  hours: 1,
-  description: ''
-});
-
-const errors = reactive({
-  date: '',
-  taskId: '',
-  hours: ''
-});
-
-const isSubmitting = ref(false);
-
-const maxDate = computed(() => {
-  const today = new Date();
-   today.setDate(today.getDate());
-  return today.toISOString().split('T')[0];
-});
-
-const activeTasks = computed(() => {
-  return props.tasks.filter(task => task.status === 'active');
-});
-
-watch(() => props.currentEntry, (newEntry) => {
-  if (newEntry) {
-    form.id = newEntry.id;
-    form.date = newEntry.date?.split('T')[0] || new Date().toISOString().split('T')[0];
-    form.taskId = newEntry.taskId;
-    form.hours = newEntry.hours || 1;
-    form.description = newEntry.description || '';
+// При открытии модалки для редактирования
+watch(() => props.currentEntry, (entry) => {
+  if (entry) {
+    formData.value = {
+      date: entry.date.split('T')[0],
+      time: parseFloat(entry.time.replace(':', '.')),
+      description: entry.description,
+      taskId: entry.taskId
+    };
+    editing.value = true;
   } else {
     resetForm();
   }
 }, { immediate: true });
-
-function resetForm() {
-  form.id = null;
-  form.date = new Date().toISOString().split('T')[0];
-  form.taskId = activeTasks.value.length ? activeTasks.value[0].id : '';
-  form.hours = 1;
-  form.description = '';
-  clearErrors();
-}
-
-function clearErrors() {
-  errors.date = '';
-  errors.taskId = '';
-  errors.hours = '';
-}
-
-function validateForm() {
-  let isValid = true;
-  clearErrors();
-
-  if (!form.date) {
-    errors.date = 'Укажите дату';
-    isValid = false;
-  } else {
-    const selectedDate = new Date(form.date);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
-    if (selectedDate > today) {
-      errors.date = 'Нельзя выбирать дату в будущем';
-      isValid = false;
-    }
-  }
-
-  if (!form.taskId) {
-    errors.taskId = 'Выберите задачу';
-    isValid = false;
-  }
-
-  if (!form.hours || form.hours < 0.5 || form.hours > 24) {
-    errors.hours = 'Введите значение от 0.5 до 24';
-    isValid = false;
-  }
-
-  return isValid;
-}
-
-async function handleSubmit() {
-  // Сначала валидация
-  if (!validateForm()) {
-    // Показываем все ошибки
-    if (errors.date) toast.error(errors.date);
-    if (errors.taskId) toast.error(errors.taskId);
-    if (errors.hours) toast.error(errors.hours);
-    return;
-  }
-
-  isSubmitting.value = true;
-  
-  try {
-    emit('save', { ...form });
-    toast.success(
-      props.currentEntry ? "Проводка успешно обновлена!" : "Проводка успешно создана!",
-      { autoClose: 2000 }
-    );
-    
-    // Даем время показать уведомление перед закрытием
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    close();
-  } catch (error) {
-    toast.error("Произошла ошибка при сохранении");
-    isSubmitting.value = false;
-  }
-}
-
-function close() {
-  resetForm();
-  emit('close');
-}
 </script>
-
 
 <style scoped>
 .modal-overlay {
@@ -226,86 +199,109 @@ function close() {
 
 .modal-content {
   background-color: white;
-  padding: 2rem;
   border-radius: 8px;
   width: 100%;
   max-width: 500px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-h2 {
-  margin-bottom: 1.5rem;
-  color: #004080;
-  text-align: center;
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+}
+
+.modal-body {
+  padding: 20px;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 16px;
 }
 
-label {
+.form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 6px;
   font-weight: 500;
 }
 
-input, select, textarea {
+.form-control {
   width: 100%;
-  padding: 0.75rem;
+  padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 1rem;
+  font-size: 14px;
 }
 
-input.invalid, select.invalid {
-  border-color: #dc3545;
+.form-control:focus {
+  outline: none;
+  border-color: #007bff;
 }
 
-.error-message {
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
-}
-
-textarea {
+textarea.form-control {
   resize: vertical;
 }
 
-.modal-actions {
+.hint {
+  color: #666;
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 4px;
+}
+
+.form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1.5rem;
+  gap: 10px;
+  margin-top: 20px;
 }
 
-button {
-  padding: 0.75rem 1.5rem;
-  border: none;
+.btn {
+  padding: 8px 16px;
   border-radius: 4px;
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  font-size: 14px;
 }
 
-button:disabled {
-  opacity: 0.7;
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background-color: #0069d9;
+}
+
+.btn-primary:disabled {
+  background-color: #6c757d;
   cursor: not-allowed;
 }
 
-.cancel-btn {
-  background-color: #f0f0f0;
-}
-
-.cancel-btn:hover {
-  background-color: #e0e0e0;
-}
-
-.save-btn {
-  background-color: #007bff;
+.btn-secondary {
+  background-color: #6c757d;
   color: white;
+  border: none;
 }
 
-.save-btn:hover:not(:disabled) {
-  background-color: #0056b3;
+.btn-secondary:hover {
+  background-color: #5a6268;
 }
 </style>

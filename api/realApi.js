@@ -372,6 +372,24 @@ async deleteRole(id) {
 
   return true;
 },
+async deleteEntry(id) {
+  const headers = {
+    ...authHeader() // добавляет Authorization: Bearer ...
+  };
+
+  const response = await fetch(`${entriesPath}${id}`, {
+    method: 'DELETE',
+    headers
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData.message || errorData.title || 'Не удалось удалить задачу';
+    throw new Error(`Сервер ответил: ${message}`);
+  }
+
+  return true;
+},
 async deleteUser(id) {
   const headers = {
     ...authHeader() // добавляет Authorization: Bearer ...
@@ -417,6 +435,17 @@ async getUsers() {
   };
   const resp = await fetchApi(basePath + 'users', hdrs);
   if (!resp.ok) throw new Error('Ошибка загрузки пользователей');
+  return await resp.json();
+},
+async getUserMe() {
+  const hdrs = {
+    headers: {
+      ...commonHeaders,
+      ...authHeader()
+    }
+  };
+  const resp = await fetchApi(basePath + 'users'+'/me', hdrs);
+  if (!resp.ok) throw new Error('Ошибка загрузки пользователя');
   return await resp.json();
 },
 async getProjects() {
@@ -782,6 +811,7 @@ async  getTasks() {
     throw new Error(`Не удалось получить задачи: ${error.message}`);
   }
 },
+
 async  assignRoleToUser(roleId, userId) {
   const headers = {
     ...commonHeaders,
@@ -857,8 +887,198 @@ async  createTask(taskData) {
     });
     throw new Error(`Не удалось создать задачу: ${error.message}`);
   }
+},
+async getEntries(days, userId) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    // Создаем объект с параметрами, исключая days если он не указан
+    const params = {};
+    if (days !== null && days !== undefined) params.days = days;
+    if (userId) params.userId = userId;
+
+    // Формируем строку запроса только с указанными параметрами
+    const queryString = Object.keys(params).length 
+      ? `?${new URLSearchParams(params).toString()}`
+      : '';
+
+    const response = await fetch(`${entriesPath}${queryString}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка загрузки записей');
+    }
+
+    const entries = await response.json();
+
+    // Преобразование данных API к нужному формату
+    return entries.map(entry => ({
+      id: entry.id,
+      date: entry.date,
+      time: entry.time,
+      description: entry.description,
+      taskId: entry.taskId,
+      userId: entry.userId,
+      userName: entry.user?.name || 'неизвестно'
+    }));
+    
+  } catch (error) {
+    console.error('Ошибка при загрузке записей:', error);
+    throw error;
+  }
+},
+async  getEntriesByDay(date, userId) {
+  try {
+    // Проверяем обязательные параметры
+    if (!date) throw new Error('Дата не указана');
+    if (!userId) throw new Error('ID пользователя не указан');
+
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    // Форматируем дату (оставляем только YYYY-MM-DD)
+    const formattedDate = new Date(date).toISOString().split('T')[0];
+
+    const queryParams = new URLSearchParams({
+      date: formattedDate,
+      userId: userId.toString() // Преобразуем в строку на случай если пришло число
+    });
+
+    const response = await fetch(`${entriesPath}by_day?${queryParams}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка загрузки записей за день');
+    }
+
+    const entries = await response.json();
+
+    return entries.map(entry => ({
+      id: entry.id,
+      date: entry.date,
+      time: entry.time,
+      description: entry.description,
+      taskId: entry.taskId,
+      userId: entry.userId,
+      userName: entry.user?.name || 'Неизвестно'
+    }));
+
+  } catch (error) {
+    console.error('Ошибка при загрузке записей за день:', error);
+    throw error;
+  }
+},
+async  addEntry({ date, time, description, taskId }) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    // Форматируем дату в нужный формат (YYYY/MM/DD)
+    const formattedDate = new Date(date).toLocaleDateString('en-CA').replace(/-/g, '/');
+    
+    // Форматируем время (заменяем точку на двоеточие)
+    const formattedTime = time.toString().replace('.', ':');
+
+    const queryParams = new URLSearchParams({
+      date: formattedDate,
+      time: formattedTime,
+      description,
+      taskId: taskId.toString()
+    });
+
+    const response = await fetch(`http://localhost:5100/entries?${queryParams}`, {
+      method: 'POST',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка при добавлении записи');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Ошибка при добавлении записи:', error);
+    throw error;
+  }
+},
+async  getTasksByRole(roleId) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    const response = await fetch(`http://localhost:5100/tasks/by_role/${roleId}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка при получении задач по роли');
+    }
+
+    const tasks = await response.json();
+
+    // Вернём только нужные поля, если необходимо
+    return tasks.map(task => ({
+      id: task.id,
+      name: task.name,
+      projectCode: task.projectCode,
+      roleId: task.roleId,
+      isActive: task.isActive
+    }));
+
+  } catch (error) {
+    console.error('Ошибка при получении задач:', error);
+    throw error;
+  }
+},
+async  updateEntry(id, { date, taskId, time, desc }) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    const queryParams = new URLSearchParams({
+      date,
+      taskId,
+      time,
+      desc
+    });
+
+    const response = await fetch(`http://localhost:5100/entries/${id}?${queryParams}`, {
+      method: 'PUT',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Ошибка при обновлении записи');
+    }
+
+    // Если сервер не возвращает тело ответа, просто завершаем выполнение
+    return;
+
+  } catch (error) {
+    console.error('Ошибка обновления проводки:', error);
+    throw error;
+  }
 }
-
-
 
 };

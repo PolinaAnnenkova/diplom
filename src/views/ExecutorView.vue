@@ -32,7 +32,6 @@
             <option value="all">Все проекты</option>
             <option value="active">Активные</option>
             <option value="inactive">Неактивные</option>
-            
           </select>
         </div>
 
@@ -66,132 +65,132 @@
           </table>
         </div>
       </div>
-<!-- Вкладка задач -->
-<div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
-  <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
-  <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
-  <div v-else class="tasks-container">
-    <div class="filters">
-      <select v-model="currentProjectFilter" @change="applyFilters">
-        <option value="">Все проекты</option>
-        <option 
-          v-for="project in projects" 
-          :key="project.id" 
-          :value="project.id"
-        >
-          {{ project.name }} ({{ project.code }})
-        </option>
-      </select>
-      
-      <select v-model="currentStatusFilter" @change="applyFilters">
-        <option value="">Все статусы</option>
-        <option value="active">Активна</option>
-        <option value="inactive">Не активна</option>
-      </select>
-    </div>
 
-    <table class="data-table full-width-table">
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Проект</th>
-          <th>Описание</th>
-          <th>Требуемые компетенции</th>
-          <th>Статус</th>
-        </tr>
-      </thead>
-      <tbody>
-    <tr v-for="task in filteredTasksByCompetence" :key="task.id">
-      <td>{{ task.title }}</td>
-      <td>{{ getProjectName(task.projectId) }}</td>
-      <td class="description-cell">{{ task.description || '-' }}</td>
-      <td>
-        <div v-if="task.requiredCompetencies && task.requiredCompetencies.length">
-          <span 
-            v-for="compId in task.requiredCompetencies" 
-            :key="compId"
-            class="competence-badge"
-            :class="{
-              'my-competence': hasCompetence(compId),
-              'other-competence': !hasCompetence(compId)
-            }"
-          >
-            {{ getCompetenceName(compId) }}
-            <span v-if="hasCompetence(compId)" class="competence-check">✓</span>
-          </span>
-        </div>
-        <span v-else class="no-competencies">Не указаны</span>
-      </td>
-      <td>
-        <span :class="['status-badge', task.status]">
-          {{ getTaskStatusName(task.status) }}
-        </span>
-      </td>
-    </tr>
-  </tbody>
-    </table>
-  </div>
-</div>
-
-      <!-- Вкладка проводок -->
-     <div v-else class="time-entries-tab full-height-tab">
-    <div class="time-entries-header">
+    <div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
+    <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
+    <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
+    <div v-else class="tasks-container">
       <div class="filters">
-        <select v-model="timeEntriesPeriod" @change="applyTimeEntriesFilter">
-          <option value="all">За все время</option>
-          <option value="month">За текущий месяц</option>
-          <option value="week">За текущую неделю</option>
-          <option value="custom">Выбрать дату</option>
+        <select v-model="currentProjectFilter" @change="applyFilters">
+          <option value="">Все проекты</option>
+          <option 
+            v-for="project in projects" 
+            :key="project.id" 
+            :value="project.id"
+          >
+            {{ project.name }} ({{ project.code }})
+          </option>
         </select>
         
-        <input 
-          v-if="timeEntriesPeriod === 'custom'"
-          type="date" 
-          v-model="selectedDate"
-          @change="applyTimeEntriesFilter"
-        >
+        <select v-model="currentStatusFilter" @change="applyFilters">
+          <option value="">Все статусы</option>
+          <option value="active">Активна</option>
+          <option value="inactive">Не активна</option>
+        </select>
       </div>
-      
-      <button @click="openCreateTimeEntryModal" class="add-button">
-        + Новая проводка
-      </button>
-    </div>
 
-        <TimeEntryModal
-          v-if="showTimeEntryModal"
-          :show="showTimeEntryModal"
-          :tasks="allTasks"
-          :currentEntry="currentTimeEntry"
-          @save="handleTimeEntrySave"
-          @close="closeTimeEntryModal"
-        />
+      <table class="data-table full-width-table">
+        <thead>
+          <tr>
+            <th>Название</th>
+            <th>Проект</th>
+            <th>Описание</th>
+            <th>Требуемые компетенции</th>
+            <th>Статус</th>
+            <th>Роль</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="task in filteredTasksByCompetence" :key="task.id">
+            <td>{{ task.title || task.name }}</td>
+            <td>{{ getProjectName(task.projectId || task.projectCode) }}</td>
+            <td class="description-cell">{{ task.description || '-' }}</td>
+            <td>
+              <div v-if="task.requiredCompetencies && task.requiredCompetencies.length">
+                <span 
+                  v-for="compId in task.requiredCompetencies" 
+                  :key="compId"
+                  class="competence-badge"
+                  :class="{
+                    'my-competence': hasCompetence(compId),
+                    'other-competence': !hasCompetence(compId)
+                  }"
+                >
+                  {{ getCompetenceName(compId) }}
+                  <span v-if="hasCompetence(compId)" class="competence-check">✓</span>
+                </span>
+              </div>
+              <span v-else class="no-competencies">Не указаны</span>
+            </td>
+            <td>
+              <span :class="['status-badge', task.status || (task.isActive ? 'active' : 'inactive')]">
+                {{ getTaskStatusName(task.status || (task.isActive ? 'active' : 'inactive')) }}
+              </span>
+            </td>
+            
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>  
+
+      <!-- Вкладка проводок -->
+      <div v-else class="time-entries-tab full-height-tab">
+        <div class="time-entries-header">
+    <div class="filters">
+      <select v-model="timeEntriesFilterMode" @change="changeFilterMode">
+        <option value="period">По периоду</option>
+        <option value="day">По конкретной дате</option>
+      </select>
+
+      <select 
+        v-if="timeEntriesFilterMode === 'period'"
+        v-model="timeEntriesPeriod" 
+        @change="loadTimeEntries"
+      >
+        <option value="0">За сегодня</option>
+        <option value="7">За последние 7 дней</option>
+        <option value="30">За последние 30 дней</option>
+        <option value="all">За все время</option>
+      </select>
+
+      <input
+        v-if="timeEntriesFilterMode === 'day'"
+        type="date"
+        v-model="selectedDate"
+        @change="loadEntriesByDay"
+      >
+    </div>
+    
+    <button @click="openCreateTimeEntryModal" class="add-button">
+      + Новая проводка
+    </button>
+  </div>
 
         <div v-if="loading.timeEntries" class="loading">Загрузка проводок...</div>
         <div v-else-if="error.timeEntries" class="error">{{ error.timeEntries }}</div>
         <div v-else class="time-entries-container">
-      <table class="data-table full-width-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>Задача</th>
-            <th>Часы</th>
-            <th>Описание</th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr 
-            v-for="entry in filteredTimeEntries" 
-            :key="entry.id"
-            :class="getEntryRowClass(entry)"
-          >
-            <td>{{ formatDate(entry.date) }}</td>
-            <td>{{ getTaskName(entry.taskId) }}</td>
-            <td>{{ entry.hours }}</td>
-            <td class="description-cell">{{ entry.description || '-' }}</td>
-            <td class="actions">
-              <button @click="editTimeEntry(entry)" class="edit-btn">✏️</button>
-              <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
+          <table class="data-table full-width-table">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Время</th>
+                <th>Задача</th>
+                <th>Описание</th>
+                <th>Пользователь</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in timeEntries" :key="entry.id">
+                <td>{{ formatDate(entry.date) }}</td>
+                <td>{{ entry.time }}</td>
+                <td>{{ getTaskName(entry.taskId) }}</td>
+                <td class="description-cell">{{ entry.description || '-' }}</td>
+                <td>{{ entry.userName }}</td>
+                <td class="actions">
+                  <button @click="editTimeEntry(entry)" class="edit-btn" >✏️</button>
+                  <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
                 </td>
               </tr>
             </tbody>
@@ -199,17 +198,24 @@
         </div>
       </div>
     </div>
+    <TimeEntryModal
+      :show="showTimeEntryModal"
+      :tasks="allTasks"
+      :projects="projects"
+      :currentEntry="currentTimeEntry"
+      @close="showTimeEntryModal = false"
+      @saved="handleTimeEntrySaved"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import mockApi from '@/../api/mockApi.js';
-import TimeEntryModal from '@/views/TimeEntryModal.vue';
 import { useRouter } from 'vue-router';
 import { toast } from 'vue3-toastify';
+import realApi from '@/../api/realApi.js';
 import 'vue3-toastify/dist/index.css';
-
+import TimeEntryModal from '@/views/TimeEntryModal.vue';
 const router = useRouter();
 
 // Основные данные
@@ -217,6 +223,8 @@ const activeTab = ref('tasks');
 const projects = ref([]);
 const allTasks = ref([]);
 const timeEntries = ref([]);
+const showTimeEntryModal = ref(false);
+const currentTimeEntry = ref(null);
 const loading = ref({
   projects: false,
   tasks: false,
@@ -230,330 +238,193 @@ const error = ref({
 const currentUser = ref(null);
 const userCompetencies = ref([]);
 const allCompetencies = ref([]);
+const timeEntriesFilterMode = ref('period');
+const selectedDate = ref(new Date().toISOString().split('T')[0]);
+function openCreateTimeEntryModal() {
+  currentTimeEntry.value = null;
+  showTimeEntryModal.value = true;
+}
+
+async function handleTimeEntrySaved(newEntry) {
+  try {
+    await loadTimeEntries();
+    toast.success('Проводка успешно добавлена');
+  } catch (error) {
+    console.error('Ошибка при обновлении списка проводок:', error);
+  }
+}
+// Метод для изменения режима фильтрации
+function changeFilterMode() {
+  if (timeEntriesFilterMode.value === 'day') {
+    loadEntriesByDay();
+  } else {
+    loadTimeEntries();
+  }}
+// Фильтры
+const projectActivityFilter = ref('all');
+const currentProjectFilter = ref('');
+const currentStatusFilter = ref('');
+const timeEntriesPeriod = ref('7');
 
 // Загрузка данных пользователя и компетенций
 async function loadUserData() {
   try {
-    const token = sessionStorage.getItem('authToken');
-    if (token) {
-      currentUser.value = await mockApi.getCurrentUser(token);
-      userCompetencies.value = currentUser.value.competencies || [];
-      console.log('User competencies loaded:', userCompetencies.value);
+    const userId = localStorage.getItem('userId');
+    if (userId) {
+      currentUser.value = { id: userId };
     }
   } catch (err) {
     console.error('Ошибка загрузки данных пользователя:', err);
   }
 }
-async function loadCompetencies() {
-  try {
-    allCompetencies.value = await mockApi.getCompetencies();
-  } catch (err) {
-    console.error('Ошибка загрузки компетенций:', err);
-  }
-}
-
-// Добавляем вызовы в onMounted
-onMounted(async () => {
-  console.log('Проверка localStorage:', {
-    token: localStorage.getItem('token'),
-    userId: localStorage.getItem('userId'),
-    role: localStorage.getItem('userRole'),
-    competencies: localStorage.getItem('userCompetencies')
-  });
-  
-  await loadUserData();
-  await loadCompetencies();
-  await loadProjects();
-  await loadTasks();
-  await loadTimeEntries();
-});
-
-// Функция проверки компетенции пользователя
-function hasCompetence(competenceId) {
-  return userCompetencies.value.includes(competenceId);
-}
-
-// Получение названия компетенции
-function getCompetenceName(competenceId) {
-  const competence = allCompetencies.value.find(c => c.id === competenceId);
-  return competence ? competence.name : `Неизвестно (${competenceId})`;
-}
-
-// Фильтрация задач по компетенциям пользователя
-
-const filteredTasksByCompetence = computed(() => {
-  let tasks = [...allTasks.value];
-  
-  // Применяем фильтры по проекту и статусу
-  if (currentProjectFilter.value) {
-    tasks = tasks.filter(task => task.projectId == currentProjectFilter.value);
-  }
-  
-  if (currentStatusFilter.value) {
-    tasks = tasks.filter(task => task.status === currentStatusFilter.value);
-  }
-  
-  return tasks;
-});
-// Фильтры для проектов
-const projectActivityFilter = ref('all');
-const filteredProjects = computed(() => {
-  if (projectActivityFilter.value === 'all') return projects.value;
-  return projects.value.filter(p => p.status === projectActivityFilter.value);
-});
-
-// Фильтры для задач
-const currentProjectFilter = ref('');
-const currentStatusFilter = ref('');
-
-// Фильтры для проводок
-const timeEntriesPeriod = ref('all');
-const selectedDate = ref(new Date().toISOString().split('T')[0]);
-const showTimeEntryModal = ref(false);
-const currentTimeEntry = ref(null);
-
-// Фильтрация задач
-const filteredTasks = computed(() => {
-  let tasks = [...allTasks.value];
-  
-  if (currentProjectFilter.value) {
-    tasks = tasks.filter(task => task.projectId == currentProjectFilter.value);
-  }
-  
-  if (currentStatusFilter.value) {
-    tasks = tasks.filter(task => task.status === currentStatusFilter.value);
-  }
-  
-  return tasks;
-});
-
-
-// Подсчет общего количества часов для дня проводки
-function getDayTotalHours(date) {
-  const dateStr = new Date(date).toISOString().split('T')[0];
-  return filteredTimeEntries.value
-    .filter(entry => {
-      const entryDate = new Date(entry.date).toISOString().split('T')[0];
-      return entryDate === dateStr;
-    })
-    .reduce((sum, entry) => sum + parseFloat(entry.hours || 0), 0);
-}
-
-// Определение класса строки для каждой проводки
-function getEntryRowClass(entry) {
-  const dayHours = getDayTotalHours(entry.date);
-  
-  if (dayHours > 8) return 'day-overlimit';
-  if (dayHours === 8) return 'day-exact';
-  return 'day-underlimit';
-}
-// Фильтрация проводок по периоду
-
-const filteredTimeEntries = computed(() => {
-  let entries = [...timeEntries.value];
-  
-  if (timeEntriesPeriod.value === 'all') {
-    return entries;
-  }
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  // Приводим даты к единому формату для сравнения (YYYY-MM-DD)
-  const formatDateForComparison = (date) => {
-    const d = new Date(date);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const todayFormatted = formatDateForComparison(today);
-
-  switch (timeEntriesPeriod.value) {
-    case 'month':
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const firstDayOfMonthFormatted = formatDateForComparison(firstDayOfMonth);
-      
-      return entries.filter(entry => {
-        const entryDateFormatted = formatDateForComparison(entry.date);
-        return entryDateFormatted >= firstDayOfMonthFormatted && entryDateFormatted <= todayFormatted;
-      });
-      
-    case 'week':
-      // Получаем первый день недели (понедельник)
-      const firstDayOfWeek = new Date(today);
-      firstDayOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
-      const firstDayOfWeekFormatted = formatDateForComparison(firstDayOfWeek);
-      
-      return entries.filter(entry => {
-        const entryDateFormatted = formatDateForComparison(entry.date);
-        return entryDateFormatted >= firstDayOfWeekFormatted && entryDateFormatted <= todayFormatted;
-      });
-      
-    case 'custom':
-      return entries.filter(entry => {
-        const entryDateFormatted = formatDateForComparison(entry.date);
-        return entryDateFormatted === selectedDate.value;
-      });
-      
-    default:
-      return entries;
-  }
-});
-// Группировка проводок по дням с подсчетом суммы часов
-const groupedTimeEntries = computed(() => {
-  const grouped = {};
-  
-  filteredTimeEntries.value.forEach(entry => {
-    const date = entry.date?.split('T')[0] || entry.date;
-    if (!grouped[date]) {
-      grouped[date] = {
-        totalHours: 0,
-        entries: []
-      };
-    }
-    grouped[date].entries.push(entry);
-    grouped[date].totalHours += parseFloat(entry.hours) || 0;
-  });
-
-  return Object.values(grouped).flatMap(group => 
-    group.entries.map(entry => ({
-      ...entry,
-      totalHours: group.totalHours
-    }))
-  );
-});
-
-// Определение класса строки в зависимости от суммы часов
-function getDayRowClass(date) {
-  const dayEntries = filteredTimeEntries.value.filter(entry => {
-    const eDate = entry.date?.split('T')[0] || entry.date;
-    const currentDate = date?.split('T')[0] || date;
-    return eDate === currentDate;
-  });
-
-  const totalHours = dayEntries.reduce((sum, entry) => sum + (parseFloat(entry.hours) || 0), 0);
-
-  if (totalHours > 8) return 'day-overlimit';
-  if (totalHours === 8) return 'day-exact';
-  return 'day-underlimit';
-}
-
-// Загрузка данных
-onMounted(async () => {
-  await loadProjects();
-  await loadTasks();
-  await loadTimeEntries();
-});
-
-async function loadProjects() {
-  try {
-    loading.value.projects = true;
-    projects.value = await mockApi.getProjects();
-  } catch (err) {
-    error.value.projects = err.message;
-  } finally {
-    loading.value.projects = false;
-  }
-}
-async function loadTasks() {
-  try {
-    loading.value.tasks = true;
-    
-    // Если пользователь исполнитель - загружаем только задачи по его компетенциям
-    if (currentUser.value?.role === 'executor' && userCompetencies.value.length > 0) {
-      allTasks.value = await mockApi.getTasksByCompetencies(userCompetencies.value);
-      console.log('Tasks filtered by competencies:', allTasks.value);
-    } else {
-      // Для остальных ролей или если нет компетенций - все задачи
-      allTasks.value = await mockApi.getTasks();
-    }
-  } catch (err) {
-    error.value.tasks = err.message;
-  } finally {
-    loading.value.tasks = false;
-  }
-}
-
-
-async function loadTimeEntries() {
+async function loadEntriesByDay() {
   try {
     loading.value.timeEntries = true;
-    const entries = await mockApi.getTimeEntries();
-    timeEntries.value = entries.map(entry => ({
-      ...entry,
-      date: entry.date?.split('T')[0] || new Date(entry.date).toISOString().split('T')[0]
-    }));
+    error.value.timeEntries = null;
+    
+    // Получаем текущего пользователя
+    const currentUser = await realApi.getUserMe();
+    console.log('Current user ID 1:', currentUser);
+
+    // Проверяем что дата выбрана
+    if (!selectedDate.value) {
+      throw new Error('Пожалуйста, выберите дату');
+    }
+
+    // Загружаем проводки
+    timeEntries.value = await realApi.getEntriesByDay(selectedDate.value, currentUser);
+    
   } catch (err) {
     error.value.timeEntries = err.message;
+    toast.error(`Ошибка загрузки проводок: ${err.message}`);
+    console.error('Ошибка в loadEntriesByDay:', err);
   } finally {
     loading.value.timeEntries = false;
   }
 }
 
+// Загрузка проектов
+async function loadProjects() {
+  try {
+    loading.value.projects = true;
+    error.value.projects = null;
+    
+    // Загружаем проекты из API
+    const apiProjects = await realApi.getProjects();
+    
+    // Преобразуем данные API в нужный формат
+    projects.value = apiProjects.map(project => ({
+      id: project.id || project.code,
+      code: project.code,
+      name: project.name,
+      status: project.status === 'active' ? 'active' : 'inactive'
+    }));
+    
+  } catch (err) {
+    error.value.projects = err.message || 'Ошибка загрузки проектов';
+    toast.error('Ошибка загрузки проектов');
+  } finally {
+    loading.value.projects = false;
+  }
+}
+
+
+// Загрузка задач по роли с сохранением в allTasks
+async function loadTasks() {
+  try {
+    loading.value.tasks = true;
+    error.value.tasks = null;
+    
+    // Получаем roleId текущего пользователя (здесь нужно реализовать логику получения)
+    const roleId = currentUser.value?.roleId || 3; // Заглушка - нужно заменить на реальное получение roleId
+    
+    // Загружаем задачи через API
+    const tasksFromApi = await realApi.getTasksByRole(roleId);
+    
+    // Преобразуем данные API в формат, совместимый с allTasks
+    allTasks.value = tasksFromApi.map(task => ({
+      id: task.id,
+      title: task.name,
+      projectId: task.projectCode,
+      description: task.description || '',
+      requiredCompetencies: task.requiredCompetencies || [],
+      status: task.isActive ? 'active' : 'inactive',
+      roleId: task.roleId
+    }));
+    
+  } catch (err) {
+    error.value.tasks = err.message || 'Ошибка загрузки задач';
+    toast.error('Ошибка загрузки задач');
+  } finally {
+    loading.value.tasks = false;
+  }
+}
+function editTimeEntry(entry) {
+  currentTimeEntry.value = entry;
+  showTimeEntryModal.value = true;
+}
+// Загрузка проводок с использованием метода getEntries
+async function loadTimeEntries() {
+  try {
+    loading.value.timeEntries = true;
+    const currentUser = await realApi.getUserMe();
+    console.log('Current user ID 2 :', currentUser);
+    // Определяем параметры запроса
+    const days = timeEntriesPeriod.value === 'all' 
+      ? null 
+      : timeEntriesPeriod.value;
+    
+    timeEntries.value = await realApi.getEntries(days, currentUser);
+    
+  } catch (err) {
+    error.value.timeEntries = err.message;
+    toast.error('Ошибка загрузки проводок');
+  } finally {
+    loading.value.timeEntries = false;
+  }
+}
+
+
+// Инициализация данных
+onMounted(async () => {
+  await loadUserData();
+  await loadProjects();
+  await loadTasks();
+  await loadTimeEntries();
+});
+
+// Фильтры и computed свойства
+const filteredProjects = computed(() => {
+  if (projectActivityFilter.value === 'all') return projects.value;
+  return projects.value.filter(p => p.status === projectActivityFilter.value);
+});
+
+const filteredTasksByCompetence = computed(() => {
+  let tasks = [...allTasks.value];
+  
+  if (currentProjectFilter.value) {
+    tasks = tasks.filter(task => task.projectId == currentProjectFilter.value);
+  }
+  
+  if (currentStatusFilter.value) {
+    tasks = tasks.filter(task => task.status === currentStatusFilter.value);
+  }
+  
+  return tasks;
+});
+
+// Вспомогательные методы
 function viewProjectTasks(projectId) {
   currentProjectFilter.value = projectId;
   activeTab.value = 'tasks';
-}
-
-function applyFilters() {
-  // Фильтрация происходит через computed свойство
 }
 
 function applyProjectFilters() {
   // Фильтрация происходит через computed свойство
 }
 
-function applyTimeEntriesFilter() {
+function applyFilters() {
   // Фильтрация происходит через computed свойство
-}
-
-function openCreateTimeEntryModal() {
-  currentTimeEntry.value = null;
-  showTimeEntryModal.value = true;
-}
-
-function editTimeEntry(entry) {
-  currentTimeEntry.value = { 
-    ...entry,
-    date: entry.date?.split('T')[0] || new Date(entry.date).toISOString().split('T')[0]
-  };
-  showTimeEntryModal.value = true;
-}
-
-function closeTimeEntryModal() {
-  showTimeEntryModal.value = false;
-  currentTimeEntry.value = null;
-}
-
-async function handleTimeEntrySave(timeEntryData) {
-  try {
-    const dataToSave = {
-      ...timeEntryData,
-      date: new Date(timeEntryData.date).toISOString()
-    };
-    
-    if (timeEntryData.id) {
-      await mockApi.updateTimeEntry(timeEntryData.id, dataToSave);
-    } else {
-      await mockApi.createTimeEntry(dataToSave);
-    }
-    await loadTimeEntries();
-    closeTimeEntryModal();
-  } catch (err) {
-    error.value.timeEntries = err.message;
-  }
-}
-
-async function deleteTimeEntry(id) {
-  if (confirm('Вы уверены, что хотите удалить эту проводку?')) {
-    try {
-      await mockApi.deleteTimeEntry(id);
-      await loadTimeEntries();
-      toast.success('Проводка успешна удалена');
-    } catch (err) {
-      error.value.timeEntries = err.message;
-      toast.error('Ошибка при удалении проводки');
-    }
-  }
 }
 
 function getProjectName(projectId) {
@@ -570,7 +441,6 @@ function getProjectStatusName(status) {
   const statusMap = {
     active: 'Активный',
     inactive: 'Неактивный'
-    
   };
   return statusMap[status] || status;
 }
@@ -589,10 +459,45 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString('ru-RU', options);
 }
 
+function hasCompetence(competenceId) {
+  return userCompetencies.value.includes(competenceId);
+}
+
+function getCompetenceName(competenceId) {
+  const competence = allCompetencies.value.find(c => c.id === competenceId);
+  return competence ? competence.name : `Неизвестно (${competenceId})`;
+}
+
+// Методы для проводок (заблокированы)
+
+
+
+
+async function deleteTimeEntry(id) {
+  if (!confirm('Вы уверены, что хотите удалить эту проводку?')) {
+    return;
+  }
+
+  try {
+    loading.value.timeEntries = true;
+    const result = await realApi.deleteEntry(id);
+    
+    if (result === true) {
+      toast.success('Проводка успешно удалена');
+      await loadTimeEntries(); // Обновляем список проводок
+    }
+  } catch (error) {
+    console.error('Ошибка удаления проводки:', error);
+    toast.error(error.message || 'Ошибка при удалении проводки');
+  } finally {
+    loading.value.timeEntries = false;
+  }
+}
+
 const logout = async () => {
   try {
-    sessionStorage.removeItem('authToken');
-    sessionStorage.removeItem('currentUser');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
     router.push('/');
   } catch (err) {
     console.error('Ошибка при выходе:', err);
@@ -601,6 +506,20 @@ const logout = async () => {
 </script>
 
 <style scoped>
+/* Стили остаются такими же, как в исходном коде */
+input[type="date"] {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.filters {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
 .executor-view {
   width: 100vw;
   padding: 20px;
@@ -745,7 +664,6 @@ const logout = async () => {
   color: #d39e00;
 }
 
-
 .competence-badge {
   display: inline-block;
   padding: 3px 8px;
@@ -776,6 +694,7 @@ const logout = async () => {
   color: #9e9e9e;
   font-style: italic;
 }
+
 .filters {
   display: flex;
   gap: 15px;
@@ -788,12 +707,6 @@ const logout = async () => {
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: white;
-}
-
-.filters input[type="date"] {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
 }
 
 .time-entries-header {
@@ -815,6 +728,13 @@ const logout = async () => {
 
 .add-button:hover {
   background-color: #0056b3;
+}
+
+.add-button:disabled,
+.edit-btn:disabled,
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .actions {
@@ -857,22 +777,6 @@ const logout = async () => {
   background-color: #f8d7da;
   border-radius: 4px;
   margin-bottom: 1rem;
-}
-
-/* Стили для подсветки проводок */
-.day-overlimit {
-  background-color: #ffebee;
-  border-left: 4px solid #f44336;
-}
-
-.day-exact {
-  background-color: #e8f5e9;
-  border-left: 4px solid #4caf50;
-}
-
-.day-underlimit {
-  background-color: #fff8e1;
-  border-left: 4px solid #ffc107;
 }
 
 @media (max-width: 768px) {
