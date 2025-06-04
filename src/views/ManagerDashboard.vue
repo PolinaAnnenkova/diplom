@@ -14,13 +14,20 @@
         >
           Задачи
         </button>
+        <button 
+          @click="activeTab = 'reports'"
+          :class="{ 'active': activeTab === 'reports' }"
+        >
+          Отчет по задачам
+        </button>
       </div>
       <div class="actions">
         <button 
+          v-if="activeTab === 'projects'"
           @click="openCreateModal"
           class="create-btn"
         >
-          {{ activeTab === 'projects' ? '+ Создать проект' : '+ Создать задачу' }}
+          + Создать проект
         </button>
         <button @click="logout" class="logout-btn">Выйти</button>
       </div>
@@ -33,10 +40,14 @@
         @project-created="handleProjectCreated"
       />
       <TasksView 
-        v-else 
+        v-else-if="activeTab === 'tasks'"
         ref="tasksView"
         @task-created="handleTaskCreated"
         @back="activeTab = 'projects'" 
+      />
+      <TasksReportView
+        v-else
+        ref="tasksReportView"
       />
     </div>
   </div>
@@ -47,6 +58,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import ProjectsView from '@/views/ProjectsView.vue';
 import TasksView from '@/views/TasksView.vue';
+import TasksReportView from '@/views/TasksReportView.vue'; // Новый компонент для отчетов
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -54,12 +66,11 @@ const router = useRouter();
 const activeTab = ref('projects');
 const projectsView = ref(null);
 const tasksView = ref(null);
+const tasksReportView = ref(null);
 
 function openCreateModal() {
   if (activeTab.value === 'projects') {
     projectsView.value?.openCreateModal();
-  } else {
-    tasksView.value?.openCreateModal();
   }
 }
 
@@ -73,10 +84,8 @@ function handleTaskCreated() {
 
 const logout = async () => {
   try {
-    // Очистка данных пользователя
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('currentUser');
-    // Перенаправление на страницу авторизации
     router.push('/');
   } catch (err) {
     console.error('Ошибка при выходе:', err);
@@ -185,10 +194,12 @@ const logout = async () => {
 
   .tabs {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .tabs button {
     flex: 1;
+    min-width: 100px;
     text-align: center;
   }
 

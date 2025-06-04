@@ -20,19 +20,30 @@
           </div>
 
           <div class="form-group">
-            <label for="entry-time">Время (часы):</label>
-            <input
-              id="entry-time"
-              type="number"
-              v-model.number="formData.time"
-              min="0.25"
-              max="24"
-              step="0.25"
-              required
-              class="form-control"
-              placeholder="1.5"
-            />
-            <small class="hint">Укажите время в часах (0.25 = 15 минут)</small>
+            <label>Время:</label>
+            <div class="time-input-group">
+              <input
+                type="number"
+                v-model.number="hours"
+                min="0"
+                max="23"
+                placeholder="Часы"
+                class="time-input"
+                @change="updateTotalTime"
+              >
+              <span>ч</span>
+              <input
+                type="number"
+                v-model.number="minutes"
+                min="0"
+                max="59"
+                placeholder="Минуты"
+                class="time-input"
+                @change="updateTotalTime"
+              >
+              <span>мин</span>
+            </div>
+            <small class="hint">Пример: 2 ч 30 мин</small>
           </div>
 
           <div class="form-group">
@@ -95,28 +106,45 @@ const emit = defineEmits(['close', 'saved']);
 
 const formData = ref({
   date: new Date().toISOString().split('T')[0],
-  time: 1,
+  time: '01:00:00', // Формат HH:MM:SS по умолчанию
   description: '',
   taskId: '',
 });
+const availableTasks = computed(() => {
+  return props.tasks?.filter(task => task.status === 'active') || [];
+});
 
+
+const hours = ref(1);
+const minutes = ref(0);
 const loading = ref(false);
 const editing = ref(false);
 
-const availableTasks = computed(() => props.tasks || []);
+//const availableTasks = computed(() => props.tasks || []);
 
 const getProjectName = (projectId) => {
   const project = props.projects?.find(p => p.id === projectId);
   return project ? project.name : 'Неизвестный проект';
 };
 
+const updateTotalTime = () => {
+  // Ограничиваем значения
+  hours.value = Math.max(0, Math.min(23, hours.value || 0));
+  minutes.value = Math.max(0, Math.min(59, minutes.value || 0));
+  
+  // Форматируем время в HH:MM:SS
+  formData.value.time = `${String(hours.value).padStart(2, '0')}:${String(minutes.value).padStart(2, '0')}:00`;
+};
+
 const resetForm = () => {
   formData.value = {
     date: new Date().toISOString().split('T')[0],
-    time: 1,
+    time: '01:00:00',
     description: '',
     taskId: '',
   };
+  hours.value = 1;
+  minutes.value = 0;
   editing.value = false;
 };
 
@@ -131,17 +159,15 @@ const submit = async () => {
 
     const entryData = {
       date: formatDateForBackend(formData.value.date),
-      time: formatTimeForBackend(formData.value.time),
+      time: formData.value.time,
       taskId: formData.value.taskId,
       desc: formData.value.description
     };
 
     if (editing.value && props.currentEntry?.id) {
-      // Редактирование существующей проводки
       await realApi.updateEntry(props.currentEntry.id, entryData);
       toast.success('Проводка успешно обновлена');
     } else {
-      // Создание новой проводки
       await realApi.addEntry(entryData);
       toast.success('Проводка успешно создана');
     }
@@ -155,24 +181,23 @@ const submit = async () => {
     loading.value = false;
   }
 };
-// Форматирование даты для бэкенда (YYYY/MM/DD)
+
 const formatDateForBackend = (dateString) => {
   const date = new Date(dateString);
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 };
 
-// Форматирование времени для бэкенда (заменяем . на :)
-const formatTimeForBackend = (time) => {
-  // Преобразуем число в строку и заменяем точку на двоеточие
-  return time.toString().replace('.', ':');
-};
-
 // При открытии модалки для редактирования
 watch(() => props.currentEntry, (entry) => {
   if (entry) {
+    // Парсим существующее время
+    const timeParts = entry.time.split(':');
+    hours.value = parseInt(timeParts[0]) || 0;
+    minutes.value = parseInt(timeParts[1]) || 0;
+    
     formData.value = {
       date: entry.date.split('T')[0],
-      time: parseFloat(entry.time.replace(':', '.')),
+      time: entry.time,
       description: entry.description,
       taskId: entry.taskId
     };
@@ -253,6 +278,20 @@ watch(() => props.currentEntry, (entry) => {
 .form-control:focus {
   outline: none;
   border-color: #007bff;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-input {
+  width: 70px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  text-align: center;
 }
 
 textarea.form-control {

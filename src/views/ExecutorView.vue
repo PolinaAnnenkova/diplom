@@ -66,7 +66,7 @@
         </div>
       </div>
 
-    <div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
+      <div v-else-if="activeTab === 'tasks'" class="tasks-tab full-height-tab">
     <div v-if="loading.tasks" class="loading">Загрузка задач...</div>
     <div v-else-if="error.tasks" class="error">{{ error.tasks }}</div>
     <div v-else class="tasks-container">
@@ -94,45 +94,36 @@
           <tr>
             <th>Название</th>
             <th>Проект</th>
-            <th>Описание</th>
             <th>Требуемые компетенции</th>
             <th>Статус</th>
-            <th>Роль</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="task in filteredTasksByCompetence" :key="task.id">
             <td>{{ task.title || task.name }}</td>
             <td>{{ getProjectName(task.projectId || task.projectCode) }}</td>
-            <td class="description-cell">{{ task.description || '-' }}</td>
             <td>
-              <div v-if="task.requiredCompetencies && task.requiredCompetencies.length">
-                <span 
-                  v-for="compId in task.requiredCompetencies" 
-                  :key="compId"
-                  class="competence-badge"
-                  :class="{
-                    'my-competence': hasCompetence(compId),
-                    'other-competence': !hasCompetence(compId)
-                  }"
-                >
-                  {{ getCompetenceName(compId) }}
-                  <span v-if="hasCompetence(compId)" class="competence-check">✓</span>
-                </span>
+              <!-- Блок компетенций -->
+              
+              
+              <!-- Блок ролей -->
+              <div class="roles-section">
+                <div class="section-title">Компетенции:</div>
+                <div class="role-badge">
+                  {{ getRoleName(task.roleId) }}
+                </div>
               </div>
-              <span v-else class="no-competencies">Не указаны</span>
             </td>
             <td>
               <span :class="['status-badge', task.status || (task.isActive ? 'active' : 'inactive')]">
                 {{ getTaskStatusName(task.status || (task.isActive ? 'active' : 'inactive')) }}
               </span>
             </td>
-            
           </tr>
         </tbody>
       </table>
     </div>
-  </div>  
+  </div>
 
       <!-- Вкладка проводок -->
       <div v-else class="time-entries-tab full-height-tab">
@@ -169,34 +160,38 @@
 
         <div v-if="loading.timeEntries" class="loading">Загрузка проводок...</div>
         <div v-else-if="error.timeEntries" class="error">{{ error.timeEntries }}</div>
-        <div v-else class="time-entries-container">
-          <table class="data-table full-width-table">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Время</th>
-                <th>Задача</th>
-                <th>Описание</th>
-                <th>Пользователь</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="entry in timeEntries" :key="entry.id">
-                <td>{{ formatDate(entry.date) }}</td>
-                <td>{{ entry.time }}</td>
-                <td>{{ getTaskName(entry.taskId) }}</td>
-                <td class="description-cell">{{ entry.description || '-' }}</td>
-                <td>{{ entry.userName }}</td>
-                <td class="actions">
-                  <button @click="editTimeEntry(entry)" class="edit-btn" >✏️</button>
-                  <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+         <div v-else class="time-entries-container">
+      <table class="data-table full-width-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Время</th>
+            <th>Задача</th>
+            <th>Описание</th>
+            <th>Пользователь</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            v-for="entry in timeEntries" 
+            :key="entry.id"
+            :class="getRowClass(entry.date)"
+          >
+            <td>{{ formatDate(entry.date) }}</td>
+            <td>{{ formatTime(entry.time) }}</td>
+            <td>{{ getTaskName(entry.taskId) }}</td>
+            <td class="description-cell">{{ entry.description || '-' }}</td>
+            <td>{{ entry.userName }}</td>
+            <td class="actions">
+              <button @click="editTimeEntry(entry)" class="edit-btn">✏️</button>
+              <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
     </div>
     <TimeEntryModal
       :show="showTimeEntryModal"
@@ -225,6 +220,72 @@ const allTasks = ref([]);
 const timeEntries = ref([]);
 const showTimeEntryModal = ref(false);
 const currentTimeEntry = ref(null);
+// Добавляем в данные
+const roles = ref([]);
+
+// Обновляем функцию загрузки задач
+async function loadTasks() {
+  try {
+    loading.value.tasks = true;
+    error.value.tasks = null;
+    
+    const roleId = currentUser.value?.roleId || 3;
+    const [tasksFromApi, rolesData] = await Promise.all([
+      realApi.getTasksByRole(roleId),
+      realApi.getRoles()
+    ]);
+    
+    roles.value = rolesData;
+    allTasks.value = tasksFromApi.map(task => ({
+      id: task.id,
+      title: task.name,
+      projectId: task.projectCode,
+      description: task.description || '',
+      requiredCompetencies: task.requiredCompetencies || [],
+      status: task.isActive ? 'active' : 'inactive',
+      roleId: task.roleId
+    }));
+    
+  } catch (err) {
+    error.value.tasks = err.message || 'Ошибка загрузки задач';
+    toast.error('Ошибка загрузки задач');
+  } finally {
+    loading.value.tasks = false;
+  }
+}
+
+// Добавляем вспомогательную функцию для получения названия роли
+function getRoleName(roleId) {
+  const role = roles.value.find(r => r.id === roleId);
+  return role ? role.name : `Роль ${roleId}`;
+}
+const formatTime = (timeStr) => {
+  if (!timeStr) return '-';
+  
+  // Обработка нестандартного формата "1.00:00:00" -> преобразуем в "1:00:00"
+  timeStr = timeStr.toString().replace('.', ':');
+  
+  // Разбиваем время на компоненты
+  const parts = timeStr.split(':');
+  
+  // Если формат "HH:MM:SS"
+  if (parts.length >= 2) {
+    let hours = parseInt(parts[0]) || 0;
+    const minutes = parseInt(parts[1]) || 0;
+    
+    // Если есть дни в формате "DD:HH:MM:SS"
+    if (parts.length > 3) {
+      const days = parseInt(parts[0]) || 0;
+      hours = parseInt(parts[1]) || 0;
+      hours += days * 24;
+    }
+    
+    if (minutes === 0) return `${hours} ч`;
+    return `${hours} ч ${minutes} мин`;
+  }
+  
+  return timeStr; // Возвращаем как есть, если формат не распознан
+};
 const loading = ref({
   projects: false,
   tasks: false,
@@ -265,7 +326,7 @@ const projectActivityFilter = ref('all');
 const currentProjectFilter = ref('');
 const currentStatusFilter = ref('');
 const timeEntriesPeriod = ref('7');
-
+console.log(timeEntries.value);
 // Загрузка данных пользователя и компетенций
 async function loadUserData() {
   try {
@@ -330,35 +391,7 @@ async function loadProjects() {
 
 
 // Загрузка задач по роли с сохранением в allTasks
-async function loadTasks() {
-  try {
-    loading.value.tasks = true;
-    error.value.tasks = null;
-    
-    // Получаем roleId текущего пользователя (здесь нужно реализовать логику получения)
-    const roleId = currentUser.value?.roleId || 3; // Заглушка - нужно заменить на реальное получение roleId
-    
-    // Загружаем задачи через API
-    const tasksFromApi = await realApi.getTasksByRole(roleId);
-    
-    // Преобразуем данные API в формат, совместимый с allTasks
-    allTasks.value = tasksFromApi.map(task => ({
-      id: task.id,
-      title: task.name,
-      projectId: task.projectCode,
-      description: task.description || '',
-      requiredCompetencies: task.requiredCompetencies || [],
-      status: task.isActive ? 'active' : 'inactive',
-      roleId: task.roleId
-    }));
-    
-  } catch (err) {
-    error.value.tasks = err.message || 'Ошибка загрузки задач';
-    toast.error('Ошибка загрузки задач');
-  } finally {
-    loading.value.tasks = false;
-  }
-}
+
 function editTimeEntry(entry) {
   currentTimeEntry.value = entry;
   showTimeEntryModal.value = true;
@@ -493,7 +526,45 @@ async function deleteTimeEntry(id) {
     loading.value.timeEntries = false;
   }
 }
+const timeEntriesByDay = computed(() => {
+  const grouped = {};
+  console.log(timeEntries.value);
+  timeEntries.value.forEach(entry => {
+    const date = entry.date; // или formatDate(entry.date) если нужно нормализовать
+    
+    if (!grouped[date]) {
+      grouped[date] = {
+        totalHours: 0,
+        entries: []
+      };
+    }
+    
+    // Преобразуем время в часы (предполагаем формат "HH:MM")
+    const [hours, minutes] = entry.time.split(':').map(Number);
+    const decimalHours = hours + minutes / 60;
+    
+    grouped[date].totalHours += decimalHours;
+    grouped[date].entries.push(entry);
+  });
+  
+  return grouped;
+});
 
+// Метод для определения класса строки
+function getRowClass(date) {
+  const dayData = timeEntriesByDay.value[date];
+  if (!dayData) return '';
+  
+  const totalHours = dayData.totalHours;
+  
+  if (totalHours > 8) {
+    return 'over-hours'; // Переработка
+  } else if (totalHours < 8) {
+    return 'under-hours'; // Недобор
+  } else {
+    return 'exact-hours'; // Ровно 8 часов
+  }
+}
 const logout = async () => {
   try {
     localStorage.removeItem('token');
@@ -514,11 +585,68 @@ input[type="date"] {
   font-family: inherit;
   font-size: 14px;
 }
+.over-hours {
+  background-color: #ffdddd; /* Яркий красный для переработки */
+  border-left: 4px solid #ff0000;
+}
 
+.under-hours {
+  background-color: #fff3bf; /* Яркий желтый для недобора */
+  border-left: 4px solid #ffcc00;
+}
+
+.exact-hours {
+  background-color: #ddffdd; /* Яркий зеленый для нормы */
+  border-left: 4px solid #00aa00;
+}
+
+/* Эффекты при наведении */
+.over-hours:hover {
+  background-color: #ffcccc;
+}
+
+.under-hours:hover {
+  background-color: #ffec99;
+}
+
+.exact-hours:hover {
+  background-color: #ccffcc;
+}
+
+/* Улучшаем читаемость текста */
+.over-hours td,
+.under-hours td,
+.exact-hours td {
+  color: #333333;
+  font-weight: 500;
+}
 .filters {
   display: flex;
   gap: 15px;
   align-items: center;
+}
+.competencies-section, .roles-section {
+  margin-bottom: 8px;
+}
+
+.section-title {
+  font-size: 0.8em;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.competencies-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e0e0e0;
+  border-radius: 12px;
+  font-size: 0.9em;
 }
 .executor-view {
   width: 100vw;

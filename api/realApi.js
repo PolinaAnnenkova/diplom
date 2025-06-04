@@ -390,6 +390,35 @@ async deleteEntry(id) {
 
   return true;
 },
+async  getTasksByDay(date) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    const queryParams = new URLSearchParams({ date });
+
+    const response = await fetch(`http://localhost:5100/tasks/by_day/entries?${queryParams}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка получения записей по дате');
+    }
+
+    const result = await response.json();
+    console.log('Получены записи за день:', result);
+    return result;
+
+  } catch (error) {
+    console.error('Ошибка получения записей по дню:', error);
+    throw error;
+  }
+},
+
 async deleteUser(id) {
   const headers = {
     ...authHeader() // добавляет Authorization: Bearer ...
@@ -448,6 +477,33 @@ async getUserMe() {
   if (!resp.ok) throw new Error('Ошибка загрузки пользователя');
   return await resp.json();
 },
+async  getTasksForPeriod(days) {
+  try {
+    const headers = {
+      ...commonHeaders,
+      ...authHeader()
+    };
+
+    const response = await fetch(`http://localhost:5100/tasks/period/entries/${days}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Ошибка получения записей за период');
+    }
+
+    const result = await response.json();
+    console.log(`Получены записи за последние ${days} дней:`, result);
+    return result;
+
+  } catch (error) {
+    console.error('Ошибка получения записей за период:', error);
+    throw error;
+  }
+},
+
 async getProjects() {
   try {
     const headers = {
