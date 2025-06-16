@@ -51,31 +51,23 @@ describe('TimeEntryModal.vue', () => {
   expect(wrapper.text()).toContain('Укажите дату');
   expect(wrapper.text()).toContain('Выберите задачу');
 });
-  it('успешно создает проводку времени', async () => {
-  // Prepare test data
-  const testDate = new Date().toISOString().split('T')[0];
-  const testTaskId = mockTasks[0].id;
-  const testHours = 2;
+  it('успешно создает проводку времени (без API)', async () => {
+  const testData = {
+    date: '2023-01-01',
+    taskId: '1',
+    hours: 2,
+    description: 'Тест'
+  }
 
-  // Fill the form
-  await wrapper.find('input[type="date"]').setValue(testDate);
-  await wrapper.find('select').setValue(testTaskId);
-  await wrapper.find('input[type="number"]').setValue(testHours);
+  await wrapper.find('input[type="date"]').setValue(testData.date)
+  await wrapper.find('select').setValue(testData.taskId)
+  await wrapper.find('input[type="number"]').setValue(testData.hours)
+  await wrapper.find('textarea').setValue(testData.description)
 
-  // Trigger form submission
-  await wrapper.find('form').trigger('submit.prevent');
+  await wrapper.find('form').trigger('submit.prevent')
+  await wrapper.vm.$nextTick()
 
-  // Wait for Vue to process
-  await wrapper.vm.$nextTick();
-
-  // Verify the emitted event
-  expect(wrapper.emitted('save')).toBeTruthy();
-  expect(wrapper.emitted('save')[0][0]).toEqual({
-    id: null,
-    date: testDate,
-    taskId: testTaskId,
-    hours: testHours,
-    description: ''
-  });
-});
+  expect(wrapper.emitted('save')).toBeTruthy()
+  expect(wrapper.emitted('save')[0][0]).toEqual(testData)
+})
 })

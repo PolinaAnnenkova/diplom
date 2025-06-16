@@ -28,6 +28,14 @@
         ref="competenciesView"
       />
     </div>
+
+    <!-- Добавляем модальное окно в конец template -->
+    <LogoutConfirmModal
+      v-if="showLogoutModal"
+      :show="showLogoutModal"
+      @close="showLogoutModal = false"
+      @confirm="performLogout"
+    />
   </div>
 </template>
 
@@ -36,21 +44,27 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import UsersView from '@/views/UsersView.vue';
 import CompetenciesView from '@/views/CompetenciesView.vue';
+import LogoutConfirmModal from '@/views/LogoutConfirmModal.vue'; // Убедитесь что путь правильный
 
 const router = useRouter();
 const activeTab = ref('users');
 const usersView = ref(null);
 const competenciesView = ref(null);
+const showLogoutModal = ref(false);
 
-const logout = async () => {
-  if (confirm('Вы уверены, что хотите выйти из системы?')) {
-    try {
-      sessionStorage.removeItem('authToken');
-      sessionStorage.removeItem('currentUser');
-      router.push('/');
-    } catch (err) {
-      console.error('Ошибка при выходе:', err);
-    }
+const logout = () => {
+  showLogoutModal.value = true;
+};
+
+const performLogout = async () => {
+  try {
+    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('currentUser');
+    router.push('/');
+  } catch (err) {
+    console.error('Ошибка при выходе:', err);
+  } finally {
+    showLogoutModal.value = false;
   }
 };
 </script>

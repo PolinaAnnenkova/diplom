@@ -30,12 +30,21 @@
             <td>{{ index + 1 }}</td>
             <td>{{ role.name }}</td>
             <td class="actions">
-              <button class="delete-btn" @click="deleteRole(role.id)">🗑️</button>
+              <button class="delete-btn" @click="confirmDelete(role)">🗑️</button>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <CompetenceDelete
+      v-if="showDeleteModal"
+      :show="showDeleteModal"
+      :user-name="roleToDelete?.name || ''"
+      @close="showDeleteModal = false"
+      @confirm="deleteRole"
+    />
   </div>
 </template>
 
@@ -44,11 +53,14 @@ import { ref, onMounted } from 'vue';
 import realApi from '@/../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+import CompetenceDelete from '@/views/CompetenceDelete.vue';
 
 const roles = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
 const newRoleName = ref('');
+const showDeleteModal = ref(false);
+const roleToDelete = ref(null);
 
 const loadData = async () => {
   try {
@@ -80,25 +92,33 @@ const addRole = async () => {
   }
 };
 
-const deleteRole = async (id) => {
-  if (!confirm('Вы уверены, что хотите удалить эту роль?')) return;
-
-  try {
-    await realApi.deleteRole(id);
-    roles.value = roles.value.filter(role => role.id !== id);
-    toast.success('Роль успешно удалена');
-  } catch (err) {
-    toast.error(err.message || 'Ошибка при удалении роли');
-    console.error('Ошибка при удалении:', err);
-  }
+const confirmDelete = (role) => {
+  roleToDelete.value = role;
+  showDeleteModal.value = true;
 };
 
+const deleteRole = async () => {
+  if (!roleToDelete.value) return;
+
+  try {
+    await realApi.deleteRole(roleToDelete.value.id);
+    roles.value = roles.value.filter(role => role.id !== roleToDelete.value.id);
+    toast.success('Компетенция успешно удалена');
+  } catch (err) {
+    toast.error(err.message || 'Ошибка при удалении компетенции');
+    console.error('Ошибка при удалении:', err);
+  } finally {
+    showDeleteModal.value = false;
+    roleToDelete.value = null;
+  }
+};
 onMounted(() => {
   loadData();
 });
 </script>
 
 <style scoped>
+/* Существующие стили остаются без изменений */
 .competence-view {
   width: 100%;
   padding: 20px;

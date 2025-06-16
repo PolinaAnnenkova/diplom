@@ -42,8 +42,7 @@
             </td>
             <td class="actions">
               <button class="edit-btn" @click="openEditModal(task)">✏️</button>
-              <button class="delete-btn" @click="confirmDelete(task.id)">🗑️</button>
-              <button class="time-entry-btn" @click="openTimeEntry(task.id)">⏱️</button>
+              <button class="delete-btn" @click="openDeleteModal(task)">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -61,6 +60,24 @@
       @close="closeTaskModal"
       @task-created="handleTaskCreated"
     />
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div v-if="showDeleteModal" class="modal-overlay">
+      <div class="delete-modal">
+        <div class="modal-header">
+          <h3>Подтверждение удаления</h3>
+          <button class="close-btn" @click="closeDeleteModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>Вы уверены, что хотите удалить задачу "{{ taskToDelete?.name }}"?</p>
+          <p>Это действие нельзя отменить.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="cancel-btn" @click="closeDeleteModal">Отмена</button>
+          <button class="confirm-delete-btn" @click="deleteTask">Удалить</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -80,10 +97,12 @@ const roles = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
 
-// Состояние модального окна
+// Состояние модальных окон
 const showTaskModal = ref(false);
+const showDeleteModal = ref(false);
 const isEditing = ref(false);
 const currentTask = ref(null);
+const taskToDelete = ref(null);
 
 // Загрузка данных
 async function loadData() {
@@ -110,20 +129,8 @@ async function loadData() {
     isLoading.value = false;
   }
 }
-async function confirmDelete(taskId) {
-  if (confirm('Вы уверены, что хотите удалить эту задачу? Это действие нельзя отменить.')) {
-    try {
-      await realApi.deleteTask(taskId);
-      tasks.value = tasks.value.filter(t => t.id !== taskId);
-      toast.success('Задача успешно удалена');
-    } catch (error) {
-      const errorMessage = error.message || 'Ошибка при удалении задачи';
-      toast.error(errorMessage);
-      console.error('Ошибка удаления:', error);
-    }
-  }
-}
-// Управление модальным окном
+
+// Управление модальными окнами
 function openCreateModal() {
   currentTask.value = null;
   isEditing.value = false;
@@ -141,6 +148,32 @@ function closeTaskModal() {
   currentTask.value = null;
 }
 
+function openDeleteModal(task) {
+  taskToDelete.value = task;
+  showDeleteModal.value = true;
+}
+
+function closeDeleteModal() {
+  showDeleteModal.value = false;
+  taskToDelete.value = null;
+}
+
+// Удаление задачи
+async function deleteTask() {
+  if (!taskToDelete.value) return;
+  
+  try {
+    await realApi.deleteTask(taskToDelete.value.id);
+    tasks.value = tasks.value.filter(t => t.id !== taskToDelete.value.id);
+    toast.success('Задача успешно удалена');
+    closeDeleteModal();
+  } catch (error) {
+    const errorMessage = error.message || 'Ошибка при удалении задачи';
+    toast.error(errorMessage);
+    console.error('Ошибка удаления:', error);
+  }
+}
+
 // Обработчики событий
 async function handleTaskCreated(newTask) {
   if (isEditing.value) {
@@ -154,13 +187,6 @@ async function handleTaskCreated(newTask) {
     tasks.value.unshift(newTask);
   }
   closeTaskModal();
-}
-
-
-
-function openTimeEntry(taskId) {
-  // Здесь можно реализовать логику для учета времени
-  toast.info(`Учет времени для задачи ${taskId}`);
 }
 
 onMounted(() => {
@@ -295,6 +321,98 @@ h1 {
   color: white;
 }
 
+/* Стили для модального окна удаления */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.delete-modal {
+  background-color: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #dc3545;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-body p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel-btn, .confirm-delete-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.cancel-btn {
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  color: #333;
+}
+
+.cancel-btn:hover {
+  background-color: #e9ecef;
+}
+
+.confirm-delete-btn {
+  background-color: #dc3545;
+  border: 1px solid #dc3545;
+  color: white;
+}
+
+.confirm-delete-btn:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
@@ -316,6 +434,11 @@ h1 {
   .actions {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .delete-modal {
+    width: 90%;
+    margin: 0 auto;
   }
 }
 </style>

@@ -20,6 +20,14 @@
       @project-created="$emit('project-created')"
     />
 
+    <DeleteConfirmModal
+      v-if="showDeleteModal"
+      :show="showDeleteModal"
+      :project-name="projectToDeleteName"
+      @close="showDeleteModal = false"
+      @confirm="confirmDelete"
+    />
+
     <div class="table-container">
       <table class="projects-table" v-if="!isLoading">
         <thead>
@@ -41,7 +49,7 @@
             </td>
             <td class="actions">
               <button @click="editProject(project)" class="edit-btn">✏️</button>
-              <button @click="deleteProject(project.id)" class="delete-btn">🗑️</button>
+              <button @click="initiateDelete(project)" class="delete-btn">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -56,6 +64,7 @@ import ProjectModal from '@/views/ProjectModal.vue';
 import realApi from '../../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
+import DeleteConfirmModal from '@/views/DeleteConfirmModal.vue';
 
 const projects = ref([]);
 const isLoading = ref(false);
@@ -64,6 +73,9 @@ const showModal = ref(false);
 const isEditing = ref(false);
 const currentProject = ref(null);
 const statusFilter = ref('all');
+const showDeleteModal = ref(false);
+const projectToDelete = ref(null);
+const projectToDeleteName = computed(() => projectToDelete.value?.name || '');
 
 const filteredProjects = computed(() => {
   if (statusFilter.value === 'all') {
@@ -81,19 +93,17 @@ async function loadProjects() {
     isLoading.value = true;
     error.value = null;
     
-    // Получаем проекты из API
     const apiProjects = await realApi.getProjects();
     
-    // Преобразуем данные API в формат компонента
     projects.value = apiProjects.map(project => ({
-      id: project.id || project.code, // используем id если есть, иначе code
+      id: project.id || project.code,
       code: project.code,
       name: project.name,
-      status: project.status === 'active' ? 'active' : 'inactive', // используем напрямую status из API
-      isActive: project.status === 'active' // дополнительное поле для фильтрации
+      status: project.status === 'active' ? 'active' : 'inactive',
+      isActive: project.status === 'active'
     }));
     
-    console.log('Transformed projects:', projects.value); // для отладки
+    console.log('Transformed projects:', projects.value);
     
   } catch (err) {
     error.value = err.message || 'Ошибка загрузки проектов';
@@ -102,7 +112,6 @@ async function loadProjects() {
     isLoading.value = false;
   }
 }
-   
 
 function applyFilters() {
   // Фильтрация происходит через computed свойство filteredProjects
@@ -124,7 +133,6 @@ function closeModal() {
   showModal.value = false;
   currentProject.value = null;
 }
-// В компоненте ProjectsView.vue
 
 async function handleSave(projectData) {
   try {
@@ -146,16 +154,24 @@ async function handleSave(projectData) {
   }
 }
 
-async function deleteProject(code) {
-  if (confirm('Вы уверены, что хотите удалить этот проект?')) {
-    try {
-      await realApi.deleteProject(code);
-      await loadProjects();
-      toast.success('Проект успешно удалён');
-    } catch (err) {
-      error.value = err.message;
-      toast.error('Ошибка при удалении проекта');
-    }
+function initiateDelete(project) {
+  projectToDelete.value = project;
+  showDeleteModal.value = true;
+}
+
+async function confirmDelete() {
+  if (!projectToDelete.value) return;
+  
+  try {
+    await realApi.deleteProject(projectToDelete.value.code);
+    await loadProjects();
+    toast.success('Проект успешно удалён');
+  } catch (err) {
+    error.value = err.message;
+    toast.error('Ошибка при удалении проекта');
+  } finally {
+    showDeleteModal.value = false;
+    projectToDelete.value = null;
   }
 }
 
@@ -256,7 +272,7 @@ defineExpose({
   border-radius: 4px;
   cursor: pointer;
   font-size: 1rem;
-  transition: opacity 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .edit-btn {
@@ -270,7 +286,8 @@ defineExpose({
 }
 
 .edit-btn:hover, .delete-btn:hover {
-  opacity: 0.8;
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 @media (max-width: 768px) {

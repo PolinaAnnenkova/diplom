@@ -76,6 +76,13 @@
       @close="closeModal"
       @user-saved="handleUserSaved"
     />
+    <ConfirmModal
+      v-if="showDeleteModal"
+      :show="showDeleteModal"
+      :user-name="userToDelete?.name || ''"
+      @close="showDeleteModal = false"
+      @confirm="deleteUser"
+    />
   </div>
 </template>
 
@@ -85,7 +92,7 @@ import realApi from '@/../api/realApi.js';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 import UserModal from '@/views/UserModal.vue';
-
+import ConfirmModal from '@/views/ConfirmModal.vue'
 const users = ref([]);
 const filteredUsers = ref([]);
 const isLoading = ref(false);
@@ -97,7 +104,8 @@ const showUserModal = ref(false);
 const currentUser = ref(null);
 const isEditing = ref(false);
 
-
+const showDeleteModal = ref(false)
+const userToDelete = ref(null)
 const loadData = async () => {
   try {
     isLoading.value = true;
@@ -121,20 +129,26 @@ const loadData = async () => {
   }
 };
 
-const confirmDelete = async (user) => {
-  if (!confirm(`Вы уверены, что хотите удалить пользователя "${user.name}"?`)) {
-    return;
-  }
+const confirmDelete = (user) => {
+  userToDelete.value = user
+  showDeleteModal.value = true
+}
 
+const deleteUser = async () => {
   try {
-    await realApi.deleteUser(user.id);
-    toast.success('Пользователь успешно удален');
-    loadData(); // Перезагружаем список пользователей
+    if (!userToDelete.value) return
+    
+    await realApi.deleteUser(userToDelete.value.id)
+    toast.success('Пользователь успешно удален')
+    loadData()
   } catch (err) {
-    console.error('Ошибка удаления пользователя:', err);
-    toast.error(err.message || 'Не удалось удалить пользователя');
+    console.error('Ошибка удаления пользователя:', err)
+    toast.error(err.message || 'Не удалось удалить пользователя')
+  } finally {
+    showDeleteModal.value = false
+    userToDelete.value = null
   }
-};
+}
 const getUserRole = (user) => {
   if (user.is_admin) return 'Администратор';
   if (user.is_manager) return 'Менеджер';

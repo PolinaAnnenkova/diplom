@@ -168,7 +168,7 @@
             <th>Время</th>
             <th>Задача</th>
             <th>Описание</th>
-            <th>Пользователь</th>
+            
             <th>Действия</th>
           </tr>
         </thead>
@@ -182,7 +182,7 @@
             <td>{{ formatTime(entry.time) }}</td>
             <td>{{ getTaskName(entry.taskId) }}</td>
             <td class="description-cell">{{ entry.description || '-' }}</td>
-            <td>{{ entry.userName }}</td>
+           
             <td class="actions">
               <button @click="editTimeEntry(entry)" class="edit-btn">✏️</button>
               <button @click="deleteTimeEntry(entry.id)" class="delete-btn">🗑️</button>
@@ -201,6 +201,17 @@
       @close="showTimeEntryModal = false"
       @saved="handleTimeEntrySaved"
     />
+    <DeleteTimeEntryModal
+    :show="showDeleteModal"
+  @confirm="confirmDelete"
+  @cancel="cancelDelete"
+  />
+  <LogoutConfirmModal
+      v-if="showLogoutModal"
+      :show="showLogoutModal"
+      @close="showLogoutModal = false"
+      @confirm="confirmLogout"
+    />
   </div>
 </template>
 
@@ -211,7 +222,10 @@ import { toast } from 'vue3-toastify';
 import realApi from '@/../api/realApi.js';
 import 'vue3-toastify/dist/index.css';
 import TimeEntryModal from '@/views/TimeEntryModal.vue';
+import DeleteTimeEntryModal from '@/views/DeleteTimeEntryModal.vue';
 const router = useRouter();
+
+const entryToDelete = ref(null);
 
 // Основные данные
 const activeTab = ref('tasks');
@@ -222,7 +236,30 @@ const showTimeEntryModal = ref(false);
 const currentTimeEntry = ref(null);
 // Добавляем в данные
 const roles = ref([]);
+import LogoutConfirmModal from '@/views/LogoutConfirmModal.vue';
 
+// Добавляем состояние для модального окна выхода
+const showLogoutModal = ref(false);
+
+// Модифицируем функцию выхода
+const logout = () => {
+  showLogoutModal.value = true;
+};
+
+// Функция подтверждения выхода
+const confirmLogout = async () => {
+  try {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userId');
+    router.push('/');
+    toast.success('Вы успешно вышли из системы');
+  } catch (err) {
+    console.error('Ошибка при выходе:', err);
+    toast.error('Ошибка при выходе из системы');
+  } finally {
+    showLogoutModal.value = false;
+  }
+};
 // Обновляем функцию загрузки задач
 async function loadTasks() {
   try {
@@ -504,28 +541,47 @@ function getCompetenceName(competenceId) {
 // Методы для проводок (заблокированы)
 
 
+// Добавляем состояния
+const showDeleteModal = ref(false);
+const entryToDeleteId = ref(null);
 
-
+// Модифицируем функцию удаления
 async function deleteTimeEntry(id) {
-  if (!confirm('Вы уверены, что хотите удалить эту проводку?')) {
-    return;
-  }
+  entryToDeleteId.value = id;
+  showDeleteModal.value = true;
+}
 
+// Функция подтверждения удаления
+async function confirmDelete() {
   try {
     loading.value.timeEntries = true;
-    const result = await realApi.deleteEntry(id);
+    const result = await realApi.deleteEntry(entryToDeleteId.value);
     
     if (result === true) {
       toast.success('Проводка успешно удалена');
-      await loadTimeEntries(); // Обновляем список проводок
+      await loadTimeEntries();
     }
   } catch (error) {
     console.error('Ошибка удаления проводки:', error);
     toast.error(error.message || 'Ошибка при удалении проводки');
   } finally {
     loading.value.timeEntries = false;
+    showDeleteModal.value = false;
+    entryToDeleteId.value = null;
   }
 }
+
+// Функция отмены удаления
+function cancelDelete() {
+  showDeleteModal.value = false;
+  entryToDeleteId.value = null;
+}
+
+// Изменяем функцию удаления
+
+// Обновляем функцию подтверждения удаления
+
+
 const timeEntriesByDay = computed(() => {
   const grouped = {};
   console.log(timeEntries.value);
@@ -565,15 +621,7 @@ function getRowClass(date) {
     return 'exact-hours'; // Ровно 8 часов
   }
 }
-const logout = async () => {
-  try {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    router.push('/');
-  } catch (err) {
-    console.error('Ошибка при выходе:', err);
-  }
-};
+
 </script>
 
 <style scoped>

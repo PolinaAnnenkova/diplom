@@ -29,7 +29,7 @@
         >
           + Создать проект
         </button>
-        <button @click="logout" class="logout-btn">Выйти</button>
+        <button @click="showLogoutModal = true" class="logout-btn">Выйти</button>
       </div>
     </div>
 
@@ -50,6 +50,12 @@
         ref="tasksReportView"
       />
     </div>
+
+    <LogoutConfirmModal
+      :show="showLogoutModal"
+      @close="showLogoutModal = false"
+      @confirm="logout"
+    />
   </div>
 </template>
 
@@ -58,7 +64,8 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import ProjectsView from '@/views/ProjectsView.vue';
 import TasksView from '@/views/TasksView.vue';
-import TasksReportView from '@/views/TasksReportView.vue'; // Новый компонент для отчетов
+import TasksReportView from '@/views/TasksReportView.vue';
+import LogoutConfirmModal from '@/views/LogoutConfirmModal.vue';
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -67,6 +74,7 @@ const activeTab = ref('projects');
 const projectsView = ref(null);
 const tasksView = ref(null);
 const tasksReportView = ref(null);
+const showLogoutModal = ref(false);
 
 function openCreateModal() {
   if (activeTab.value === 'projects') {
@@ -87,8 +95,12 @@ const logout = async () => {
     sessionStorage.removeItem('authToken');
     sessionStorage.removeItem('currentUser');
     router.push('/');
+    toast.success('Вы успешно вышли из системы');
   } catch (err) {
     console.error('Ошибка при выходе:', err);
+    toast.error('Ошибка при выходе из системы');
+  } finally {
+    showLogoutModal.value = false;
   }
 };
 </script>

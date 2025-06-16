@@ -131,7 +131,7 @@ const resetForm = () => {
   selectedCompetencies.value = [];
   Object.keys(errors).forEach(key => errors[key] = '');
 };
-
+const nameRegex = /^[a-zA-Zа-яА-ЯёЁ\s]+$/;
 // Инициализация формы при изменении currentUser
 watch(() => props.currentUser, (user) => {
   if (user) {
@@ -170,13 +170,22 @@ loadRoles();
 const validate = () => {
   let isValid = true;
   
-  errors.name = !form.name.trim() ? 'Имя обязательно' : '';
+  if (!form.name.trim()) {
+    errors.name = 'Имя обязательно';
+    isValid = false;
+  } else if (!nameRegex.test(form.name)) {
+    errors.name = 'Имя может содержать только буквы и пробелы';
+    isValid = false;
+  } else {
+    errors.name = '';
+  }
   
   if (!props.isEditing) {
     errors.password = !form.password ? 'Пароль обязателен' : 
                      form.password.length < 6 ? 'Минимум 6 символов' : '';
+    if (errors.password) isValid = false;
   }
-  
+
   if (!userType.value) {
     toast.error('Выберите тип пользователя');
     isValid = false;

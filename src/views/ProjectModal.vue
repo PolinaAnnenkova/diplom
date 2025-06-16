@@ -16,14 +16,14 @@
           <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
         </div>
         
-        <div class="form-group">
-          <label for="code">Код проекта*</label>
+        <!-- Поле "Код проекта" показываем только при редактировании -->
+        <div class="form-group" v-if="isEditing">
+          <label for="code">Код проекта</label>
           <input 
             type="text" 
             id="code" 
             v-model="form.code" 
-            required
-            :readonly="isEditing"
+            readonly
             :class="{ 'invalid': errors.code }"
           >
           <span v-if="errors.code" class="error-message">{{ errors.code }}</span>
@@ -80,7 +80,7 @@ const form = reactive({
   id: null,
   name: '',
   code: '',
-  isActive: true // Изменено с status на isActive (boolean)
+  isActive: true
 });
 
 const errors = reactive({
@@ -91,15 +91,13 @@ const errors = reactive({
 const isSubmitting = ref(false);
 
 watch(() => props.currentProject, (newVal) => {
-   console.log('Current project data:', newVal); // Логируем входящие данные
   if (newVal) {
     Object.assign(form, {
       id: newVal.id,
       name: newVal.name,
       code: newVal.code,
-      isActive: newVal.status === 'active' // Преобразуем в boolean
+      isActive: newVal.status === 'active'
     });
-    console.log('Form after assignment:', {...form});
   } else {
     resetForm();
   }
@@ -129,7 +127,8 @@ function validate() {
     isValid = false;
   }
 
-  if (!form.code.trim()) {
+  // Валидация кода только при редактировании
+  if (props.isEditing && !form.code.trim()) {
     errors.code = 'Введите код проекта';
     isValid = false;
   }
@@ -139,20 +138,20 @@ function validate() {
 
 async function handleSubmit() {
   if (!validate()) return;
-console.log('Submitting form:', {...form});
+
   isSubmitting.value = true;
 
   try {
     const projectData = {
       name: form.name,
-      code: form.code,
       isActive: form.isActive
     };
 
-    if (props.isEditing && form.id) {
+    // Добавляем код только при редактировании
+    if (props.isEditing) {
+      projectData.code = form.code;
       projectData.id = form.id;
     }
-console.log('Sending projectData:', projectData);
 
     emit('save', projectData);
     emit('project-created');
@@ -165,7 +164,6 @@ console.log('Sending projectData:', projectData);
   } catch (error) {
     toast.error('Ошибка при сохранении проекта');
     console.error('Save error:', error);
-    
   } finally {
     isSubmitting.value = false;
   }
@@ -178,6 +176,7 @@ function closeModal() {
 </script>
 
 <style scoped>
+/* Стили остаются без изменений */
 .status-toggle {
   display: flex;
   border-radius: 4px;
@@ -211,6 +210,7 @@ function closeModal() {
   background-color: #cccccc;
   cursor: not-allowed;
 }
+
 .modal-overlay {
   position: fixed;
   top: 0;
