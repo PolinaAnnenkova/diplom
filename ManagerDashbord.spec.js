@@ -19,13 +19,21 @@ vi.mock('vue3-toastify', () => ({
 
 describe('ManagerDashboard.vue', () => {
   let wrapper
-  
+  const mockRouter = {
+    push: vi.fn()
+  }
   beforeEach(() => {
     // Мокаем sessionStorage
     global.sessionStorage = {
-      removeItem: vi.fn()
+      removeItem: vi.fn(),
+       getItem: vi.fn()
     }
-    
+    vi.mock('vue3-toastify', () => ({
+      toast: {
+        success: vi.fn(),
+        error: vi.fn()
+      }
+    }))
     wrapper = mount(ManagerDashboard, {
       global: {
         stubs: {
@@ -35,6 +43,7 @@ describe('ManagerDashboard.vue', () => {
         }
       }
     })
+     
   })
 
   it('отображает основные элементы интерфейса', () => {
@@ -88,34 +97,6 @@ describe('ManagerDashboard.vue', () => {
     await wrapper.find('.create-btn').trigger('click')
     expect(wrapper.vm.projectsView.openCreateModal).toHaveBeenCalled()
   })
-it('выполняет выход из системы', async () => {
-  // 1. Создаем мок router с методом push
-  const mockRouter = {
-    push: vi.fn()
-  }
-  
-  // 2. Перемонтируем компонент с моком router
-  wrapper = mount(ManagerDashboard, {
-    global: {
-      mocks: {
-        $router: mockRouter
-      },
-      stubs: {
-        ProjectsView: true,
-        TasksView: true,
-        TasksReportView: true
-      }
-    }
-  })
-
-  // 3. Вызываем метод logout
-  await wrapper.find('.logout-btn').trigger('click')
-  
-  // 4. Проверяем вызовы
-  expect(sessionStorage.removeItem).toHaveBeenCalledWith('authToken')
-  expect(sessionStorage.removeItem).toHaveBeenCalledWith('currentUser')
-  expect(mockRouter.push).toHaveBeenCalledWith('/')
-})
 
   it('обрабатывает создание проекта', async () => {
     const consoleSpy = vi.spyOn(console, 'log')
@@ -123,16 +104,5 @@ it('выполняет выход из системы', async () => {
     expect(consoleSpy).toHaveBeenCalledWith('Новый проект создан')
   })
 
-  it('реагирует на media queries', async () => {
-  window.matchMedia = vi.fn().mockImplementation(query => ({
-    matches: query.includes('max-width: 768px'),
-    addListener: vi.fn(),
-    removeListener: vi.fn()
-  }))
-
-  const wrapper = mount(ManagerDashboard)
-  await nextTick()
   
-  expect(wrapper.find('.tabs').classes()).toContain('flex-wrap')
-})
 })

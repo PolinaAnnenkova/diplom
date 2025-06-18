@@ -1,102 +1,148 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ProjectModal from '@/views/ProjectModal.vue'
+import { nextTick } from 'vue'
 
 describe('ProjectModal.vue', () => {
   let wrapper
-  const closeSpy = vi.fn()
-  const saveSpy = vi.fn()
-  const createdSpy = vi.fn()
+  const mockProject = {
+    id: 1,
+    name: 'Тестовый проект',
+    code: 'TEST',
+    status: 'active'
+  }
 
   beforeEach(() => {
+    // Мокаем toast
+    vi.mock('vue3-toastify', () => ({
+      toast: {
+        success: vi.fn(),
+        error: vi.fn()
+      }
+    }))
+
     wrapper = mount(ProjectModal, {
       props: {
-        showModal: true,
-        currentProject: null,
+        showModal: false,
         isEditing: false
-      },
-      // Прослушка эмитов через слушатели
-      attrs: {
-        onClose: closeSpy,
-        onSave: saveSpy,
-        onProjectCreated: createdSpy
       }
     })
   })
 
-  it('отображается при showModal=true', () => {
-    expect(wrapper.find('.modal-overlay').exists()).toBe(true)
+  it('отображает форму создания проекта', async () => {
+    await wrapper.setProps({ showModal: true })
+    expect(wrapper.find('h2').text()).toBe('Создание проекта')
+    expect(wrapper.find('input#code').exists()).toBe(false)
   })
 
-  it('содержит поля для name, code и статус', () => {
-    expect(wrapper.find('input#name').exists()).toBe(true)
-    expect(wrapper.find('input#code').exists()).toBe(true)
-    expect(wrapper.find('.status-toggle').exists()).toBe(true)
-  })
-
-  it('показывает ошибки при пустом submit', async () => {
-    await wrapper.find('form').trigger('submit.prevent')
-
-    expect(wrapper.find('.error-message').exists()).toBe(true)
-    expect(wrapper.find('.error-message').text()).toBe('Введите название проекта')
-    expect(wrapper.findAll('.error-message')[1].text()).toBe('Введите код проекта')
-  })
-
-  it('может заполнить форму и отправить данные', async () => {
-    const nameInput = wrapper.find('input#name')
-    const codeInput = wrapper.find('input#code')
-    const activeBtn = wrapper.find('button.toggle-btn.active')
-
-    await nameInput.setValue('Мой проект')
-    await codeInput.setValue('PRJ001')
-
-    // Проверим, что активный статус true (кнопка Активный активна)
-    expect(activeBtn.text()).toBe('Активный')
-
-    await wrapper.find('form').trigger('submit.prevent')
-
-    expect(saveSpy).toHaveBeenCalledOnce()
-    const emittedProject = saveSpy.mock.calls[0][0]
-
-    expect(emittedProject).toEqual({
-      name: 'Мой проект',
-      code: 'PRJ001',
-      isActive: true
+  it('отображает форму редактирования проекта', async () => {
+    await wrapper.setProps({ 
+      showModal: true,
+      isEditing: true,
+      currentProject: mockProject
     })
+    
+    expect(wrapper.find('h2').text()).toBe('Редактирование проекта')
+    expect(wrapper.find('input#code').exists()).toBe(true)
+    expect(wrapper.find('input#name').element.value).toBe(mockProject.name)
+    expect(wrapper.find('input#code').element.value).toBe(mockProject.code)
   })
 
-  it('кнопка отмены вызывает close и очищает форму', async () => {
-  // Заполним форму
-  await wrapper.find('input#name').setValue('Test')
-  await wrapper.find('input#code').setValue('CODE')
+  it('закрывает модальное окно при клике на оверлей', async () => {
+    await wrapper.setProps({ showModal: true })
+    await wrapper.find('.modal-overlay').trigger('click')
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
 
-  // Reset the spy call count before the actual test
-  closeSpy.mockClear()
+  it('закрывает модальное окно при нажатии отмены', async () => {
+    await wrapper.setProps({ showModal: true })
+    await wrapper.find('.cancel-btn').trigger('click')
+    expect(wrapper.emitted('close')).toBeTruthy()
+  })
 
-  await wrapper.find('button.cancel-btn').trigger('click')
+  it('валидирует форму перед сохранением', async () => {
+    await wrapper.setProps({ showModal: true })
+    
+    // Пытаемся сохранить с пустым названием
+    await wrapper.find('form').trigger('submit')
+    await nextTick()
+    
+    expect(wrapper.find('.error-message').text()).toBe('Введите название проекта')
+    expect(wrapper.emitted('save')).toBeFalsy()
+  })
 
-  expect(closeSpy).toHaveBeenCalledOnce()
-  // Проверяем, что форма очистилась
-  expect(wrapper.vm.form.name).toBe('')
-  expect(wrapper.vm.form.code).toBe('')
-  expect(wrapper.vm.form.isActive).toBe(true)
-})
-  it('при передаче currentProject в режиме редактирования форма заполняется', async () => {
-    const project = {
-      id: 123,
-      name: 'Existing',
-      code: 'EX123',
-      status: 'active'
-    }
+  it('отправляет данные формы при создании', async () => {
+    await wrapper.setProps({ showModal: true })
+    
+    // Заполняем форму
+    await wrapper.find('input#name').setValue('Новый проект')
+    await wrapper.find('.toggle-btn:first-child').trigger('click') // Активный
+    
+    // Отправляем форму
+    await wrapper.find('form').trigger('submit')
+    await nextTick()
+    
+    expect(wrapper.emitted('save')).toBeTruthy()
+    expect(wrapper.emitted('save')[0]).toEqual([{
+      name: 'Новый проект',
+      isActive: true
+    }])
+  })
 
-    await wrapper.setProps({ currentProject: project, isEditing: true })
+  it('отправляет данные формы при редактировании', async () => {
+    await wrapper.setProps({ 
+      showModal: true,
+      isEditing: true,
+      currentProject: mockProject
+    })
+    
+    // Изменяем данные
+    await wrapper.find('input#name').setValue('Измененное название')
+    await wrapper.find('.toggle-btn:last-child').trigger('click') // Неактивный
+    
+    // Отправляем форму
+    await wrapper.find('form').trigger('submit')
+    await nextTick()
+    
+    expect(wrapper.emitted('save')).toBeTruthy()
+    expect(wrapper.emitted('save')[0]).toEqual([{
+      id: 1,
+      code: 'TEST',
+      name: 'Измененное название',
+      isActive: false
+    }])
+  })
 
-    expect(wrapper.vm.form.id).toBe(123)
-    expect(wrapper.vm.form.name).toBe('Existing')
-    expect(wrapper.vm.form.code).toBe('EX123')
-    expect(wrapper.vm.form.isActive).toBe(true)
+  it('блокирует кнопку сохранения при отправке', async () => {
+    await wrapper.setProps({ showModal: true })
+    await wrapper.find('input#name').setValue('Новый проект')
+    
+    // Проверяем что кнопка не заблокирована
+    expect(wrapper.find('.save-btn').attributes('disabled')).toBeUndefined()
+    
+    // Отправляем форму
+    wrapper.vm.isSubmitting = true
+    await nextTick()
+    
+    // Проверяем что кнопка заблокирована
+    expect(wrapper.find('.save-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.save-btn').text()).toBe('Сохранение...')
+  })
 
-    // Проверка readonly для code
-    expect(wrapper.find('input#code').attributes('readonly')).toBeDefined()
+  
+
+  it('отображает статус проекта', async () => {
+    await wrapper.setProps({ 
+      showModal: true,
+      currentProject: mockProject
+    })
+    
+    // Проверяем активный статус
+    expect(wrapper.find('.toggle-btn:first-child').classes()).toContain('active')
+    
+    // Меняем на неактивный
+    await wrapper.find('.toggle-btn:last-child').trigger('click')
+    expect(wrapper.vm.form.isActive).toBe(false)
+    expect(wrapper.find('.toggle-btn:last-child').classes()).toContain('active')
   })
 })

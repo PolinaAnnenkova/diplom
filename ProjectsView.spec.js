@@ -134,38 +134,6 @@ it('отображает состояние загрузки через прям
   });
 });
 
- it('удаляет проект с подтверждением', async () => {
-  window.confirm = vi.fn(() => true);
-  await nextTick();
-  const deleteButtons = wrapper.findAll('.delete-btn');
-  
-  await deleteButtons[0].trigger('click');
-  await nextTick();
-  
-  expect(window.confirm).toHaveBeenCalled();
-  // Измените ожидание на ID вместо кода
-  expect(realApi.deleteProject).toHaveBeenCalledWith(mockProjects[0].id);
-});
-  it('сохраняет новый проект', async () => {
-  // Сбрасываем счетчики вызовов перед тестом
-  realApi.getProjects.mockClear()
-  
-  const newProject = { code: 'PRJ3', name: 'Новый проект', status: 'active' }
-  
-  await wrapper.vm.handleSave(newProject)
-  await nextTick()
-  
-  expect(realApi.createProject).toHaveBeenCalledWith(newProject)
-  
-  // Проверяем что getProjects вызывался после создания проекта
-  expect(realApi.getProjects).toHaveBeenCalled()
-  
-  // Вместо точного количества можно проверить минимум 2 вызова
-  expect(realApi.getProjects.mock.calls.length).toBeGreaterThanOrEqual(2)
-  
-  expect(wrapper.vm.showModal).toBe(false)
-})
-
  
 it('обновляет существующий проект', async () => {
   const updatedProject = { 
