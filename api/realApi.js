@@ -399,7 +399,7 @@ async  getTasksByDay(date) {
 
     const queryParams = new URLSearchParams({ date });
 
-    const response = await fetch(`http://localhost:5100/tasks/by_day/entries?${queryParams}`, {
+    const response = await fetch(`${basePath}tasks/by_day/entries?${queryParams}`, {
       method: 'GET',
       headers
     });
@@ -484,7 +484,7 @@ async  getTasksForPeriod(days) {
       ...authHeader()
     };
 
-    const response = await fetch(`http://localhost:5100/tasks/period/entries/${days}`, {
+   const response = await fetch(`${basePath}tasks/period/entries/${days}`, {
       method: 'GET',
       headers
     });
@@ -1055,7 +1055,7 @@ async  addEntry({ date, time, description, taskId }) {
       taskId: taskId.toString()
     });
 
-    const response = await fetch(`http://localhost:5100/entries?${queryParams}`, {
+    const response = await fetch(`${basePath}entries?${queryParams}`, {
       method: 'POST',
       headers
     });
@@ -1078,7 +1078,7 @@ async  getTasksByRole(roleId) {
       ...authHeader()
     };
 
-    const response = await fetch(`http://localhost:5100/tasks/by_role/${roleId}`, {
+    const response = await fetch(`${basePath}tasks/by_role/${roleId}`, {
       method: 'GET',
       headers
     });
@@ -1118,7 +1118,7 @@ async  updateEntry(id, { date, taskId, time, desc }) {
       desc
     });
 
-    const response = await fetch(`http://localhost:5100/entries/${id}?${queryParams}`, {
+    const response = await fetch(`${basePath}entries/${id}?${queryParams}`, {
       method: 'PUT',
       headers
     });
