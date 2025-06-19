@@ -266,11 +266,19 @@ async function loadTasks() {
     loading.value.tasks = true;
     error.value.tasks = null;
     
-    const roleId = currentUser.value?.roleId || 3;
+    const roleId = currentUser.value?.roleId;
+    
+    // Выводим roleId в консоль для проверки
+    console.log('Текущая роль пользователя (roleId):', roleId);
+    
     const [tasksFromApi, rolesData] = await Promise.all([
       realApi.getTasksByRole(roleId),
       realApi.getRoles()
     ]);
+    
+    // Можно также вывести полученные данные для отладки
+    console.log('Полученные задачи:', tasksFromApi);
+    console.log('Полученные роли:', rolesData);
     
     roles.value = rolesData;
     allTasks.value = tasksFromApi.map(task => ({
@@ -286,6 +294,7 @@ async function loadTasks() {
   } catch (err) {
     error.value.tasks = err.message || 'Ошибка загрузки задач';
     toast.error('Ошибка загрузки задач');
+    console.error('Ошибка при загрузке задач:', err); // Логируем ошибку
   } finally {
     loading.value.tasks = false;
   }
@@ -367,12 +376,51 @@ console.log(timeEntries.value);
 // Загрузка данных пользователя и компетенций
 async function loadUserData() {
   try {
-    const userId = localStorage.getItem('userId');
-    if (userId) {
-      currentUser.value = { id: userId };
+    console.log('[loadUserData] Начало загрузки данных пользователя');
+    
+    // 1. Получаем userId из localStorage
+    const userId = await realApi.getUserMe();
+    console.log('[loadUserData] userId из localStorage:', userId);
+    
+    if (!userId) {
+      console.warn('[loadUserData] userId не найден в localStorage');
+      return;
     }
+    
+    // 2. Загружаем полные данные пользователя
+    console.log('[loadUserData] Загрузка данных пользователя с сервера...');
+    const userData = await realApi.getUserById(userId);
+    console.log('[loadUserData] Ответ сервера:', userData);
+    
+    // 3. Проверяем наличие обязательных полей
+    if (!userData?.id) {
+      throw new Error('Неполные данные пользователя');
+    }
+    
+    // 4. Формируем currentUser
+    currentUser.value = {
+  id: userData.id,
+  name: userData.name || 'Без имени',
+  role: userData.roles[0]?.name || null,  // Get role name from roles array
+  roleId: userData.roles[0]?.id || null,  // Get role ID from roles array
+  isAdmin: userData.isAdmin || false,
+  isManager: userData.isManager || false,
+  fullData: userData
+};
+    
+    console.log('[loadUserData] Текущий пользователь:', currentUser.value);
+    console.log('[loadUserData] Данные успешно загружены');
+    
   } catch (err) {
-    console.error('Ошибка загрузки данных пользователя:', err);
+    console.error('[loadUserData] Ошибка загрузки:', {
+      message: err.message,
+      stack: err.stack,
+      time: new Date().toISOString()
+    });
+    
+    // Дополнительные действия при ошибке
+    error.value.user = 'Ошибка загрузки данных пользователя';
+    toast.error('Не удалось загрузить данные профиля');
   }
 }
 async function loadEntriesByDay() {
